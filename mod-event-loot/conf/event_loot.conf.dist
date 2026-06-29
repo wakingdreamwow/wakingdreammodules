@@ -1,0 +1,16 @@
+# Event Loot + World Boss Event System
+EventLoot.Enable = 1
+EventLoot.MoneyCopper = 5000
+# Gold pro Looter-Level (Kupfer)
+EventLoot.MoneyPerLevel = 5000
+# Announcements
+EventLoot.Announce.Enable = 1
+EventLoot.Announce.IntervalMinutes = 30
+# Helper bot waves (elite bosses only): trickle in, offset from boss
+EventLoot.BotSeek.Enable = 1
+EventLoot.BotSeek.LevelRange = 5
+EventLoot.BotSeek.MaxPerWave = 3
+EventLoot.BotSeek.WaveSeconds = 20
+# Auto-raid: group helper bots with the engaging player
+EventLoot.AutoRaid.Enable = 1
+EventLoot.AutoRaid.MaxBots = 20

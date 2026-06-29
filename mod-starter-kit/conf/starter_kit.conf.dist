@@ -1,0 +1,33 @@
+[worldserver]
+
+#
+#    StarterKit.Enable
+#        One-time starter kit (gold + bags) on first login. 1 = on, 0 = off.
+#        Default: 1
+#
+StarterKit.Enable = 1
+
+#
+#    StarterKit.IncludeBots
+#        Also give the kit to playerbots (so they have bag space / items to trade).
+#        Default: 1
+#
+StarterKit.IncludeBots = 1
+
+#
+#    StarterKit.Gold
+#        Gold (not copper) granted once. Default: 5
+#
+StarterKit.Gold = 5
+
+#
+#    StarterKit.BagEntry
+#        Item entry of the bag to grant. Default: 4496 (Small Brown Pouch, 6 slots)
+#
+StarterKit.BagEntry = 4496
+
+#
+#    StarterKit.BagCount
+#        Number of bags to grant. Default: 4
+#
+StarterKit.BagCount = 4

@@ -1,0 +1,7 @@
+[worldserver]
+RaidFill.Enable = 1
+RaidFill.DefaultSize = 25
+RaidFill.MaxSize = 40
+# How many levels BELOW / ABOVE the leader a bot may be (0 = exact level only).
+RaidFill.LevelBelow = 0
+RaidFill.LevelAbove = 0

@@ -1,0 +1,10 @@
+*.bak.*
+*.o
+*.obj
+*.swp
+*.tmp
+*.log
+build/
+.vscode/
+.idea/
+.DS_Store

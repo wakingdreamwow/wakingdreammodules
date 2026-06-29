@@ -1,0 +1,12 @@
+#
+# Duel Honor - Ehre fuer gewonnene Duelle gegen (Bot-)Gegner im Level-Fenster
+#
+DuelHonor.Enable = 1
+# Gegner darf max. so viele Level UNTER dir sein (sonst keine Ehre)
+DuelHonor.MinBelow = 3
+# Gegner darf max. so viele Level UEBER dir sein
+DuelHonor.MaxAbove = 5
+# Nur gegen Bots Ehre vergeben (1) oder auch gegen echte Spieler (0)
+DuelHonor.OnlyVsBots = 1
+# Anti-Farm: derselbe Gegner gibt erst nach X Sekunden wieder Ehre (0 = aus)
+DuelHonor.VictimCooldownSeconds = 300

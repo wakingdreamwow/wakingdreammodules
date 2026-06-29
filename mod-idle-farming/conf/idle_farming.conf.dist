@@ -1,0 +1,10 @@
+#
+# Idle Farming - Berufe arbeiten offline weiter
+#
+IdleFarming.Enable = 1
+# Max. angerechnete Offline-Stunden
+IdleFarming.MaxHours = 24
+# Gesammelte Items pro Stunde je Sammelberuf
+IdleFarming.ItemsPerHour = 2
+# Mindest-Offlinezeit (Minuten), ab der etwas gutgeschrieben wird
+IdleFarming.MinOfflineMinutes = 30
