@@ -1,0 +1,86 @@
+# WCPX end-to-end roundtrip: two independent AC stacks.
+#
+# Source stack (S)  → produces a .wcpx file for a synthetic test character
+# Target stack (T)  → imports that file and re-creates the character
+#
+# Run:
+#   docker compose up -d
+#   ./roundtrip.sh
+#   docker compose down -v
+#
+# The compose file layers the mod into the stock AzerothCore image via a
+# small Dockerfile.worldserver in this directory.
+
+services:
+
+  # ---- Source stack -----------------------------------------------------
+  s-db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: acore
+      MYSQL_USER: acore
+      MYSQL_PASSWORD: acore
+    volumes:
+      - s-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -pacore --silent"]
+      interval: 5s
+      retries: 30
+    networks: [wcpx-net]
+
+  s-worldserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.worldserver
+    depends_on:
+      s-db: { condition: service_healthy }
+    environment:
+      WCPX_SIDE: source
+      MYSQL_HOST: s-db
+      DOCKER_USE_DEV_NETWORK: "true"
+    volumes:
+      - ./source-conf:/azerothcore/env/dist/etc
+      - ./shared-out:/wcpx-out
+    ports:
+      - "8085:8085"
+    networks: [wcpx-net]
+
+  # ---- Target stack -----------------------------------------------------
+  t-db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: acore
+      MYSQL_USER: acore
+      MYSQL_PASSWORD: acore
+    volumes:
+      - t-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -pacore --silent"]
+      interval: 5s
+      retries: 30
+    networks: [wcpx-net]
+
+  t-worldserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.worldserver
+    depends_on:
+      t-db: { condition: service_healthy }
+    environment:
+      WCPX_SIDE: target
+      MYSQL_HOST: t-db
+      DOCKER_USE_DEV_NETWORK: "true"
+    volumes:
+      - ./target-conf:/azerothcore/env/dist/etc
+      - ./shared-out:/wcpx-out
+    ports:
+      - "8086:8085"
+    networks: [wcpx-net]
+
+networks:
+  wcpx-net:
+    driver: bridge
+
+volumes:
+  s-db:
+  t-db:
