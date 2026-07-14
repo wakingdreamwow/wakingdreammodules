@@ -46,12 +46,20 @@ commands. The intended integration is:
 
 ## Install
 
-Standard AzerothCore module drop-in:
+This mod ships as part of the Wakingdream modules monorepo. Standard
+AzerothCore module drop-in:
 
 ```
 cd azerothcore-wotlk/modules
-git clone https://github.com/wakingdreamwow/mod-character-portability.git
+git clone --depth 1 https://github.com/wakingdreamwow/wakingdreammodules.git
+# only this module
+mv wakingdreammodules/mod-character-portability .
+rm -rf wakingdreammodules
 ```
+
+Or add the whole monorepo as a submodule at `modules/wakingdreammodules/`
+and reference the subdirectory in your build. The AC module discovery
+recurses into subdirectories.
 
 Rebuild worldserver, then:
 
