@@ -13,6 +13,7 @@ Custom AzerothCore 3.3.5a modules powering the **Wakingdream** WoW private serve
 | `mod-idle-farming` | Offline gathering: logout timestamps → next login mails skill-scaled profession mats (mining/herbalism/skinning/fishing) |
 | `mod-duel-honor` | Honor reward on `DUEL_WON` against level-matched real players; per-victim cooldown anti-farm |
 | `mod-fly-in-old-world` | Server-side `SetCanFly(true)` for players with riding skill on Map 0/1; bypasses Northrend `HasSpell(54197)` Cold-Weather-Flying check via auto-grant |
+| `mod-character-portability` | Reference implementation of the [WCPX-1.0](https://github.com/wakingdreamwow/wcpx-spec) character portability format: export/import signed + encrypted `.wcpx` character files across private servers. Ed25519 + AES-256-GCM + Argon2id. |
 
 ## Convention
 
