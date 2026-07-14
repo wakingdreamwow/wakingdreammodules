@@ -46,6 +46,11 @@ namespace WCPX
         Argon2MemoryKB = sConfigMgr->GetOption<uint32_t>("CharacterPortability.Argon2.MemoryCostKB", 65536);
         Argon2Parallel = sConfigMgr->GetOption<uint32_t>("CharacterPortability.Argon2.Parallelism", 4);
 
+        HttpEnabled     = sConfigMgr->GetOption<int32_t>("CharacterPortability.Http.Enabled", 0) != 0;
+        HttpBindHost    = sConfigMgr->GetOption<std::string>("CharacterPortability.Http.BindHost", "127.0.0.1");
+        HttpBindPort    = static_cast<uint16_t>(sConfigMgr->GetOption<uint32_t>("CharacterPortability.Http.BindPort", 7879));
+        HttpBearerToken = sConfigMgr->GetOption<std::string>("CharacterPortability.Http.BearerToken", "");
+
         LOG_INFO("module", "[WCPX] trust={} whitelist={} freeExport={}/mo requireToken={}",
                  TrustMode, TrustWhitelist.size(), ExportFreePerMonth, ImportRequireToken ? 1 : 0);
     }

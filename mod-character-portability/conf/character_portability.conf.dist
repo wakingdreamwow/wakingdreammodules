@@ -83,3 +83,27 @@ CharacterPortability.Import.RejectOverLevel = 0
 CharacterPortability.Argon2.TimeCost = 3
 CharacterPortability.Argon2.MemoryCostKB = 65536
 CharacterPortability.Argon2.Parallelism = 4
+
+########################################
+# 6. HTTP API (§12 Integration API)
+########################################
+
+# Enable the HTTP server for CMS integration. Disabled by default to keep
+# the mod passive (GM commands still work). Enable ONLY if you have a CMS
+# that will call these endpoints. NEVER expose to the public internet —
+# bind loopback and reverse-proxy through your CMS host if needed.
+CharacterPortability.Http.Enabled = 0
+
+# Address to bind. Default: 127.0.0.1 (loopback only).
+CharacterPortability.Http.BindHost = "127.0.0.1"
+
+# Port to bind. Default 7879 (adjacent to AC SOAP port 7878).
+CharacterPortability.Http.BindPort = 7879
+
+# Shared secret bearer token — the CMS must send this in the
+# Authorization: Bearer <token> header. Generate a strong random string
+# and share ONLY with your CMS backend. Empty = HTTP disabled regardless
+# of Http.Enabled above.
+#
+# Example: openssl rand -hex 32
+CharacterPortability.Http.BearerToken = ""

@@ -88,6 +88,25 @@ CharacterPortability.Export.FreePerMonth = 1
 CharacterPortability.Import.RequireTokenId = 1  # 1 = require paid-import token
 ```
 
+## HTTP API (optional)
+
+Off by default. Enable in config to let a CMS talk to the mod via HTTP.
+Implements the endpoints defined in [WCPX SPEC §12](https://github.com/wakingdreamwow/wcpx-spec/blob/main/SPEC.md#12-integration-api-optional).
+
+```conf
+CharacterPortability.Http.Enabled = 1
+CharacterPortability.Http.BindHost = "127.0.0.1"    # loopback only!
+CharacterPortability.Http.BindPort = 7879
+CharacterPortability.Http.BearerToken = "<openssl rand -hex 32 output>"
+```
+
+The server runs in a background thread inside worldserver. All endpoints
+require `Authorization: Bearer <token>` (except `/status`, which is public
+metadata for health checks).
+
+**NEVER expose this port to the public internet.** The CMS runs on the
+same host or an adjacent host on a trusted network.
+
 ## GM commands
 
 - `.wcpx export <charname> <passphrase>` — writes a .wcpx file for the named

@@ -35,6 +35,12 @@ namespace WCPX
         bool ImportRequireToken = true;
         std::string ExportOutputDir = "wcpx-exports";
 
+        // HTTP API (§12 Integration API)
+        bool HttpEnabled = false;
+        std::string HttpBindHost = "127.0.0.1";
+        uint16_t HttpBindPort = 7879;
+        std::string HttpBearerToken;      // if empty, HTTP starts disabled
+
         // Import policy
         uint32_t ImportMaxAgeDays = 0;
         bool ImportRejectOverLevel = false;
@@ -162,6 +168,12 @@ namespace WCPX
     // GM command registration entry point (called by loader).
     // ------------------------------------------------------------------------
     void RegisterChatCommands();
+
+    // ------------------------------------------------------------------------
+    // HTTP server lifecycle (§12). No-op if HttpEnabled=false or token empty.
+    // ------------------------------------------------------------------------
+    void StartHttpServer();
+    void StopHttpServer();
 }
 
 // AC static-loader entry point (referenced by mod-character-portability_loader.cpp)
