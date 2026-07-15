@@ -1,0 +1,31 @@
+# Extends the stock AzerothCore worldserver image with the mod source
+# and rebuilds. Rebuild time on first run ~15-30 min; cached thereafter.
+#
+# Uses acore/ac-wotlk-worldserver:master as base — the community-maintained
+# AC image. If you're on a fork or a specific version, replace the base tag.
+
+FROM acore/ac-wotlk-worldserver:master AS base
+
+USER root
+
+# libargon2-dev is not in the base image; add it.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libargon2-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy the mod source. We copy from the monorepo root into modules/.
+# When building locally, run: docker compose build --build-context modsrc=../../..
+# Or supply the mod source directly via a bind-mount override.
+COPY --from=modsrc mod-character-portability /azerothcore/modules/mod-character-portability
+
+# Trigger AC's CMake to discover the new module and rebuild worldserver.
+# This step is the expensive one on first build.
+WORKDIR /azerothcore
+RUN mkdir -p build && cd build && \
+    cmake -DCMAKE_INSTALL_PREFIX=/azerothcore/env/dist \
+          -DWITH_WARNINGS=0 -DTOOLS=0 -DSERVERS=1 \
+          -DMODULES=static .. && \
+    cmake --build . --target worldserver --parallel && \
+    cmake --install . --component runtime
+
+USER acore

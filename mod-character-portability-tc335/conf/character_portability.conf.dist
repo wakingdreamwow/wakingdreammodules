@@ -1,0 +1,125 @@
+[worldserver]
+
+#
+# mod-character-portability — WCPX-1.0 reference implementation
+#
+# Docs: https://github.com/wakingdreamwow/wcpx-spec
+#
+
+########################################
+# 1. Server identity (required for export)
+########################################
+
+# Path to this server's Ed25519 private key, in OpenSSL PEM format.
+# Generate: openssl genpkey -algorithm ED25519 -out wcpx_server.key
+# Derive pubkey: openssl pkey -in wcpx_server.key -pubout
+# Keep this file readable ONLY by the worldserver user.
+CharacterPortability.Server.PrivateKeyPath = "env/dist/etc/wcpx_server.key"
+
+# Free-form server name embedded in every exported file's `source.name`.
+CharacterPortability.Server.Name = "Wakingdream"
+
+# Optional contact URL or email embedded in `source.contact`.
+CharacterPortability.Server.Contact = "https://wakingdream.cc"
+
+# The expansion tag written into exports (`source.expansion`).
+# Options: vanilla | tbc | wotlk | cata | mop | ...
+CharacterPortability.Server.Expansion = "wotlk"
+
+########################################
+# 2. Trust mode (required for import)
+########################################
+
+# How to decide whether to trust an incoming file's source pubkey.
+#   "whitelist" — only pubkeys in Trust.Whitelist are accepted (SAFE default)
+#   "tofu"      — new pubkeys queued for admin approval, then auto-accepted
+#   "open"      — accept any valid signature (TESTING ONLY, DO NOT USE IN PROD)
+CharacterPortability.Trust.Mode = "whitelist"
+
+# Whitespace-separated list of base64-encoded Ed25519 public keys (44 chars each)
+# that are pre-approved as source servers. Add entries here per admin decision.
+# Example:
+#   CharacterPortability.Trust.Whitelist = "AbCdEf...==  GhIjKl...=="
+CharacterPortability.Trust.Whitelist = ""
+
+# Path where TOFU-pending pubkeys are recorded for admin review.
+CharacterPortability.Trust.TofuQueuePath = "env/dist/etc/wcpx_tofu_pending.txt"
+
+########################################
+# 3. Rate limiting & payment gating
+########################################
+
+# Free exports per account per rolling 30-day window. Additional exports
+# beyond this require a valid paid-export token.
+CharacterPortability.Export.FreePerMonth = 1
+
+# If 1, imports require a `paid_token` field from your payment integration.
+# Set to 0 only for internal testing.
+CharacterPortability.Import.RequireTokenId = 1
+
+# Directory where GM-command exports are written. Web API bypasses this.
+CharacterPortability.Export.OutputDir = "wcpx-exports"
+
+########################################
+# 4. Import policy
+########################################
+
+# Maximum acceptable age of an incoming .wcpx file, in days. 0 = no limit.
+# Files older than this are rejected. Recommended: 0 (files should be
+# valid forever; use this only if you have a specific security reason).
+CharacterPortability.Import.MaxAgeDays = 0
+
+# Reject imports where the exported level exceeds this server's level cap
+# (as opposed to silently clamping — see WCPX §7.4). 0 = clamp, 1 = reject.
+CharacterPortability.Import.RejectOverLevel = 0
+
+########################################
+# 5. Argon2id key-derivation parameters
+########################################
+# These are baked into each exported file's header. Recipient uses the
+# per-file values, not these — so changing these only affects NEW exports.
+# Defaults follow the "moderate" profile from OWASP 2023.
+
+CharacterPortability.Argon2.TimeCost = 3
+CharacterPortability.Argon2.MemoryCostKB = 65536
+CharacterPortability.Argon2.Parallelism = 4
+
+########################################
+# 5b. Equipment carry-over
+########################################
+# WCPX-1.0 excludes bags/bank/inventory/gold from portability to protect the
+# target server's economy. Optionally, equipped gear (helm, chest, weapon,
+# etc.) can be included WITHOUT enchants/gems/random-suffix/durability — the
+# character arrives wearing base-stat items. Both sides toggle independently.
+
+# Source-side: include equipped items in the .wcpx payload. Default: on.
+CharacterPortability.Export.IncludeEquipment = 1
+
+# Target-side: honor the equipment field when importing. Set to 0 for a
+# purist "arrive naked" policy that preserves your server's economy.
+# Default: on.
+CharacterPortability.Import.AcceptEquipment = 1
+
+########################################
+# 6. HTTP API (§12 Integration API)
+########################################
+
+# Enable the HTTP server for CMS integration. Disabled by default to keep
+# the mod passive (GM commands still work). Enable ONLY if you have a CMS
+# that will call these endpoints. NEVER expose to the public internet —
+# bind loopback and reverse-proxy through your CMS host if needed.
+CharacterPortability.Http.Enabled = 0
+
+# Address to bind. Default: 127.0.0.1 (loopback only).
+CharacterPortability.Http.BindHost = "127.0.0.1"
+
+# Port to bind. Default 7879 (adjacent to AC SOAP port 7878).
+CharacterPortability.Http.BindPort = 7879
+
+# Shared secret bearer token — the CMS must send this in the
+# Authorization: Bearer <token> header. Generate a strong random string
+# and share ONLY with your CMS backend. Empty = HTTP disabled regardless
+# of Http.Enabled above.
+#
+# Example: openssl rand -hex 32
+CharacterPortability.Http.BearerToken = ""

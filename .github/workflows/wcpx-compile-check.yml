@@ -1,0 +1,129 @@
+name: WCPX compile check (AzerothCore + TrinityCore 3.3.5)
+
+# Header-level "does it still compile" check for mod-character-portability
+# against upstream AzerothCore + TrinityCore 3.3.5. Not a full worldserver
+# build (too slow for per-commit CI); we compile just the module's .cpp
+# files with -c against each core's public headers.
+#
+# When this fails: a core moved an API surface we depend on. Update the
+# affected mod file (and PORTING-*.md if the fix would benefit other
+# adopters), and re-run.
+
+on:
+  push:
+    paths:
+      - 'mod-character-portability/**'
+      - 'mod-character-portability-tc335/**'
+      - '.github/workflows/wcpx-compile-check.yml'
+  pull_request:
+    paths:
+      - 'mod-character-portability/**'
+      - 'mod-character-portability-tc335/**'
+      - '.github/workflows/wcpx-compile-check.yml'
+  workflow_dispatch:
+  schedule:
+    # Weekly Monday 05:00 UTC so we catch upstream API drift even without commits.
+    - cron: '0 5 * * 1'
+
+jobs:
+  compile-azerothcore:
+    name: Compile against AzerothCore master
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout mod
+        uses: actions/checkout@v4
+        with:
+          path: mod
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            g++ libssl-dev libboost-all-dev libbz2-dev libmariadb-dev \
+            libreadline-dev cmake libargon2-dev git
+
+      - name: Shallow clone AzerothCore
+        run: git clone --depth 1 https://github.com/azerothcore/azerothcore-wotlk.git ac
+
+      - name: Header-only compile check (AC)
+        working-directory: mod/mod-character-portability/src
+        env:
+          AC_ROOT: ${{ github.workspace }}/ac
+        run: |
+          # Collect the AC header paths the mod pulls in.
+          INC="-I. -I../src/third_party -I$AC_ROOT/src/common -I$AC_ROOT/src/common/Debugging \
+               -I$AC_ROOT/src/common/Logging -I$AC_ROOT/src/common/Threading \
+               -I$AC_ROOT/src/common/Utilities -I$AC_ROOT/src/server/database \
+               -I$AC_ROOT/src/server/database/Database -I$AC_ROOT/src/server/game/Chat \
+               -I$AC_ROOT/src/server/game/Entities/Item -I$AC_ROOT/src/server/game/Entities/Player \
+               -I$AC_ROOT/src/server/game/Entities/Object \
+               -I$AC_ROOT/src/server/game/Globals \
+               -I$AC_ROOT/src/server/game/Spells -I$AC_ROOT/src/server/game/Accounts \
+               -I$AC_ROOT/src/server/game/Server \
+               -I$AC_ROOT/src/server/game/Scripting -I$AC_ROOT/src/server/shared \
+               -I$AC_ROOT/src/server/shared/Common"
+          FAIL=0
+          for f in *.cpp; do
+            echo "=== compile $f ==="
+            g++ -std=c++17 -fsyntax-only $INC "$f" 2>&1 | tee /tmp/log-$f.txt || true
+            # We tolerate warnings, but any hard error terminates the job.
+            if grep -q 'error:' /tmp/log-$f.txt; then
+              echo "::error file=$f::compile failure — see log"
+              FAIL=1
+            fi
+          done
+          if [ $FAIL -ne 0 ]; then
+            echo "AC compile check failed. This means AzerothCore master moved an API surface."
+            exit 1
+          fi
+
+  compile-trinitycore-3.3.5:
+    name: Compile against TrinityCore 3.3.5 (preview)
+    runs-on: ubuntu-24.04
+    continue-on-error: true   # preview branch — failures notify but don't block
+    steps:
+      - name: Checkout mod
+        uses: actions/checkout@v4
+        with:
+          path: mod
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            g++ libssl-dev libboost-all-dev libbz2-dev libmariadb-dev \
+            libreadline-dev cmake libargon2-dev git
+
+      - name: Shallow clone TrinityCore 3.3.5
+        run: git clone --depth 1 -b 3.3.5 https://github.com/TrinityCore/TrinityCore.git tc
+
+      - name: Header-only compile check (TC-335)
+        working-directory: mod/mod-character-portability-tc335/src
+        env:
+          TC_ROOT: ${{ github.workspace }}/tc
+        run: |
+          INC="-I. -I../src/third_party -I$TC_ROOT/src/common -I$TC_ROOT/src/common/Debugging \
+               -I$TC_ROOT/src/common/Logging -I$TC_ROOT/src/common/Threading \
+               -I$TC_ROOT/src/common/Utilities -I$TC_ROOT/src/server/database \
+               -I$TC_ROOT/src/server/database/Database -I$TC_ROOT/src/server/game/Chat \
+               -I$TC_ROOT/src/server/game/Entities/Item -I$TC_ROOT/src/server/game/Entities/Player \
+               -I$TC_ROOT/src/server/game/Entities/Object \
+               -I$TC_ROOT/src/server/game/Globals \
+               -I$TC_ROOT/src/server/game/Spells -I$TC_ROOT/src/server/game/Accounts \
+               -I$TC_ROOT/src/server/game/Server \
+               -I$TC_ROOT/src/server/game/Scripting -I$TC_ROOT/src/server/shared \
+               -I$TC_ROOT/src/server/shared/Common"
+          FAIL=0
+          for f in *.cpp; do
+            echo "=== compile $f ==="
+            g++ -std=c++17 -fsyntax-only $INC "$f" 2>&1 | tee /tmp/log-tc-$f.txt || true
+            if grep -q 'error:' /tmp/log-tc-$f.txt; then
+              echo "::warning file=$f::TC compile failure — port may need updates"
+              FAIL=1
+            fi
+          done
+          if [ $FAIL -ne 0 ]; then
+            echo "::warning::TC-335 preview compile broke. Update mod-character-portability-tc335/ or note in PORTING-TC335.md."
+            # continue-on-error handles the exit
+            exit 1
+          fi
