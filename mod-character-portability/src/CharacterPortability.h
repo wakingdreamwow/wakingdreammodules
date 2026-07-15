@@ -185,6 +185,12 @@ namespace WCPX
         uint32_t itemId = 0;
         std::string itemName;   // empty if unknown on this server
     };
+    struct PreviewMount
+    {
+        uint32_t spellId = 0;
+        std::string spellName;
+        std::string iconName;   // e.g. "ability_mount_ridingelephant" (no path/ext)
+    };
     struct PreviewResult
     {
         bool ok = false;
@@ -206,6 +212,8 @@ namespace WCPX
         uint32_t reputationCount = 0, skillCount = 0, titleCount = 0;
         // Equipment (slot + itemId + itemName lookup)
         std::vector<PreviewEquipItem> equipment;
+        // Mounts learned (subset of spells that have SPELL_AURA_MOUNTED)
+        std::vector<PreviewMount> mounts;
         // Non-fatal warnings the CMS should surface
         std::vector<std::string> warnings;
     };

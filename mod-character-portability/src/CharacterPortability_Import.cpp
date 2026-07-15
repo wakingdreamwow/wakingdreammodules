@@ -23,6 +23,9 @@
 #include "World.h"
 #include "DBCStores.h"
 #include "CharacterCache.h"
+#include "SpellMgr.h"
+#include "SpellInfo.h"
+#include "SharedDefines.h"
 
 #include <regex>
 #include <sstream>
@@ -717,6 +720,43 @@ namespace WCPX
                     res.warnings.push_back("Equipment item " + std::to_string(e.itemId) +
                                            " not found on this server; will be dropped.");
                 res.equipment.push_back(std::move(e));
+            }
+        }
+
+        // Mounts — filter payload.spells for those with SPELL_AURA_MOUNTED aura.
+        // Uses SpellMgr + SpellInfo + SpellIcon DBC to get name+icon per mount.
+        std::regex spRe("\"spells\"\\s*:\\s*\\[([^\\]]*)\\]");
+        std::smatch spm;
+        if (std::regex_search(canonPayload, spm, spRe))
+        {
+            std::string body = spm[1];
+            std::istringstream iss(body);
+            uint32_t sid;
+            char comma;
+            while (iss >> sid)
+            {
+                SpellInfo const* si = sSpellMgr->GetSpellInfo(sid);
+                if (si)
+                {
+                    bool isMount = false;
+                    for (uint8 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+                    {
+                        if (si->Effects[i].ApplyAuraName == SPELL_AURA_MOUNTED)
+                        { isMount = true; break; }
+                    }
+                    if (isMount)
+                    {
+                        PreviewMount m;
+                        m.spellId = sid;
+                        m.spellName = si->SpellName[0] ? si->SpellName[0] : "";
+                        // Icon lookup: AC doesn't store the filename from SpellIcon.dbc
+                        // server-side. Leave iconName empty; the CMS can substitute
+                        // via its own icon service or fall back to a placeholder.
+                        m.iconName = "";
+                        res.mounts.push_back(std::move(m));
+                    }
+                }
+                iss >> comma;
             }
         }
 

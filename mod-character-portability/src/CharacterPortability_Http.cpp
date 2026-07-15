@@ -303,6 +303,17 @@ namespace WCPX
               << ",\"item_name\":\"" << esc(e.itemName) << "\"}";
         }
         j << "],"
+          << "\"mounts\":[";
+        first = true;
+        for (auto const& m : r.mounts)
+        {
+            if (!first) j << ",";
+            first = false;
+            j << "{\"spell_id\":" << m.spellId
+              << ",\"spell_name\":\"" << esc(m.spellName) << "\""
+              << ",\"icon_name\":\"" << esc(m.iconName) << "\"}";
+        }
+        j << "],"
           << "\"warnings\":[";
         first = true;
         for (auto const& w : r.warnings)
