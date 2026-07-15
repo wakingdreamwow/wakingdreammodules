@@ -3,6 +3,10 @@
 #include "Log.h"
 #include <sstream>
 
+// TC-3.3.5 exposes typed defaults via non-template GetStringDefault / GetIntDefault
+// / GetBoolDefault. AC's templated `sConfigMgr->GetOption<T>(...)` does not exist.
+// We use the concrete TC calls verbatim.
+
 namespace WCPX
 {
     Config& Config::Instance()
@@ -23,36 +27,36 @@ namespace WCPX
 
     void Config::Load()
     {
-        ServerPrivateKeyPath = sConfigMgr->GetOption<std::string>(
+        ServerPrivateKeyPath = sConfigMgr->GetStringDefault(
             "CharacterPortability.Server.PrivateKeyPath", "env/dist/etc/wcpx_server.key");
-        ServerName    = sConfigMgr->GetOption<std::string>("CharacterPortability.Server.Name", "Unnamed");
-        ServerContact = sConfigMgr->GetOption<std::string>("CharacterPortability.Server.Contact", "");
-        ServerExpansion = sConfigMgr->GetOption<std::string>("CharacterPortability.Server.Expansion", "wotlk");
+        ServerName    = sConfigMgr->GetStringDefault("CharacterPortability.Server.Name", "Unnamed");
+        ServerContact = sConfigMgr->GetStringDefault("CharacterPortability.Server.Contact", "");
+        ServerExpansion = sConfigMgr->GetStringDefault("CharacterPortability.Server.Expansion", "wotlk");
 
-        TrustMode = sConfigMgr->GetOption<std::string>("CharacterPortability.Trust.Mode", "whitelist");
+        TrustMode = sConfigMgr->GetStringDefault("CharacterPortability.Trust.Mode", "whitelist");
         TrustWhitelist = SplitWhitespace(
-            sConfigMgr->GetOption<std::string>("CharacterPortability.Trust.Whitelist", ""));
-        TofuQueuePath = sConfigMgr->GetOption<std::string>(
+            sConfigMgr->GetStringDefault("CharacterPortability.Trust.Whitelist", ""));
+        TofuQueuePath = sConfigMgr->GetStringDefault(
             "CharacterPortability.Trust.TofuQueuePath", "env/dist/etc/wcpx_tofu_pending.txt");
 
-        ExportFreePerMonth = sConfigMgr->GetOption<uint32_t>("CharacterPortability.Export.FreePerMonth", 1);
-        ImportRequireToken = sConfigMgr->GetOption<int32_t>("CharacterPortability.Import.RequireTokenId", 1) != 0;
-        ExportOutputDir = sConfigMgr->GetOption<std::string>("CharacterPortability.Export.OutputDir", "wcpx-exports");
+        ExportFreePerMonth = (uint32_t) sConfigMgr->GetIntDefault("CharacterPortability.Export.FreePerMonth", 1);
+        ImportRequireToken = sConfigMgr->GetIntDefault("CharacterPortability.Import.RequireTokenId", 1) != 0;
+        ExportOutputDir = sConfigMgr->GetStringDefault("CharacterPortability.Export.OutputDir", "wcpx-exports");
 
-        ImportMaxAgeDays = sConfigMgr->GetOption<uint32_t>("CharacterPortability.Import.MaxAgeDays", 0);
-        ImportRejectOverLevel = sConfigMgr->GetOption<int32_t>("CharacterPortability.Import.RejectOverLevel", 0) != 0;
+        ImportMaxAgeDays = (uint32_t) sConfigMgr->GetIntDefault("CharacterPortability.Import.MaxAgeDays", 0);
+        ImportRejectOverLevel = sConfigMgr->GetIntDefault("CharacterPortability.Import.RejectOverLevel", 0) != 0;
 
-        ExportIncludeEquipment = sConfigMgr->GetOption<int32_t>("CharacterPortability.Export.IncludeEquipment", 1) != 0;
-        ImportAcceptEquipment  = sConfigMgr->GetOption<int32_t>("CharacterPortability.Import.AcceptEquipment",  1) != 0;
+        ExportIncludeEquipment = sConfigMgr->GetIntDefault("CharacterPortability.Export.IncludeEquipment", 1) != 0;
+        ImportAcceptEquipment  = sConfigMgr->GetIntDefault("CharacterPortability.Import.AcceptEquipment",  1) != 0;
 
-        Argon2TimeCost = sConfigMgr->GetOption<uint32_t>("CharacterPortability.Argon2.TimeCost", 3);
-        Argon2MemoryKB = sConfigMgr->GetOption<uint32_t>("CharacterPortability.Argon2.MemoryCostKB", 65536);
-        Argon2Parallel = sConfigMgr->GetOption<uint32_t>("CharacterPortability.Argon2.Parallelism", 4);
+        Argon2TimeCost = (uint32_t) sConfigMgr->GetIntDefault("CharacterPortability.Argon2.TimeCost", 3);
+        Argon2MemoryKB = (uint32_t) sConfigMgr->GetIntDefault("CharacterPortability.Argon2.MemoryCostKB", 65536);
+        Argon2Parallel = (uint32_t) sConfigMgr->GetIntDefault("CharacterPortability.Argon2.Parallelism", 4);
 
-        HttpEnabled     = sConfigMgr->GetOption<int32_t>("CharacterPortability.Http.Enabled", 0) != 0;
-        HttpBindHost    = sConfigMgr->GetOption<std::string>("CharacterPortability.Http.BindHost", "127.0.0.1");
-        HttpBindPort    = static_cast<uint16_t>(sConfigMgr->GetOption<uint32_t>("CharacterPortability.Http.BindPort", 7879));
-        HttpBearerToken = sConfigMgr->GetOption<std::string>("CharacterPortability.Http.BearerToken", "");
+        HttpEnabled     = sConfigMgr->GetIntDefault("CharacterPortability.Http.Enabled", 0) != 0;
+        HttpBindHost    = sConfigMgr->GetStringDefault("CharacterPortability.Http.BindHost", "127.0.0.1");
+        HttpBindPort    = static_cast<uint16_t>(sConfigMgr->GetIntDefault("CharacterPortability.Http.BindPort", 7879));
+        HttpBearerToken = sConfigMgr->GetStringDefault("CharacterPortability.Http.BearerToken", "");
 
         TC_LOG_INFO("module", "[WCPX] trust={} whitelist={} freeExport={}/mo requireToken={}",
                  TrustMode, TrustWhitelist.size(), ExportFreePerMonth, ImportRequireToken ? 1 : 0);

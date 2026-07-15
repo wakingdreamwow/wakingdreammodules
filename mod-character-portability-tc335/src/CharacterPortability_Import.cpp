@@ -739,16 +739,19 @@ namespace WCPX
                 if (si)
                 {
                     bool isMount = false;
-                    for (uint8 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+                    // TC-3.3.5 accessor: GetEffects() -> std::array<SpellEffectInfo, MAX_SPELL_EFFECTS>&
+                    // AC uses `si->Effects[i]` direct-array access; TC hides the array behind an accessor.
+                    for (SpellEffectInfo const& eff : si->GetEffects())
                     {
-                        if (si->Effects[i].ApplyAuraName == SPELL_AURA_MOUNTED)
+                        if (eff.ApplyAuraName == SPELL_AURA_MOUNTED)
                         { isMount = true; break; }
                     }
                     if (isMount)
                     {
                         PreviewMount m;
                         m.spellId = sid;
-                        m.spellName = si->SpellName[0] ? si->SpellName[0] : "";
+                        // TC's SpellInfo has SpellName as a LocalizedString struct exposing operator[].
+                        m.spellName = si->SpellName[LOCALE_enUS] ? si->SpellName[LOCALE_enUS] : "";
                         // Icon lookup: AC doesn't store the filename from SpellIcon.dbc
                         // server-side. Leave iconName empty; the CMS can substitute
                         // via its own icon service or fall back to a placeholder.

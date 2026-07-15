@@ -1,6 +1,6 @@
 name: WCPX compile check (AzerothCore + TrinityCore 3.3.5)
 
-# Header-level "does it still compile" check for mod-character-portability
+# Header-only "does it still compile" check for mod-character-portability
 # against upstream AzerothCore + TrinityCore 3.3.5. Not a full worldserver
 # build (too slow for per-commit CI); we compile just the module's .cpp
 # files with -c against each core's public headers.
@@ -50,23 +50,51 @@ jobs:
         env:
           AC_ROOT: ${{ github.workspace }}/ac
         run: |
-          # Collect the AC header paths the mod pulls in.
-          INC="-I. -I../src/third_party -I$AC_ROOT/src/common -I$AC_ROOT/src/common/Debugging \
-               -I$AC_ROOT/src/common/Logging -I$AC_ROOT/src/common/Threading \
-               -I$AC_ROOT/src/common/Utilities -I$AC_ROOT/src/server/database \
-               -I$AC_ROOT/src/server/database/Database -I$AC_ROOT/src/server/game/Chat \
-               -I$AC_ROOT/src/server/game/Entities/Item -I$AC_ROOT/src/server/game/Entities/Player \
-               -I$AC_ROOT/src/server/game/Entities/Object \
-               -I$AC_ROOT/src/server/game/Globals \
-               -I$AC_ROOT/src/server/game/Spells -I$AC_ROOT/src/server/game/Accounts \
-               -I$AC_ROOT/src/server/game/Server \
-               -I$AC_ROOT/src/server/game/Scripting -I$AC_ROOT/src/server/shared \
-               -I$AC_ROOT/src/server/shared/Common"
+          # Include path list mirrors what AC's own CMakeLists exposes to
+          # modules. Verified 2026-07-15 against AC HEAD tree layout.
+          INC="-I. -I./third_party \
+            -I$AC_ROOT/src/common \
+            -I$AC_ROOT/src/common/Asio \
+            -I$AC_ROOT/src/common/Debugging \
+            -I$AC_ROOT/src/common/Logging \
+            -I$AC_ROOT/src/common/Threading \
+            -I$AC_ROOT/src/common/Utilities \
+            -I$AC_ROOT/src/common/Configuration \
+            -I$AC_ROOT/src/server/database \
+            -I$AC_ROOT/src/server/database/Database \
+            -I$AC_ROOT/src/server/database/Database/Implementation \
+            -I$AC_ROOT/src/server/database/Field \
+            -I$AC_ROOT/src/server/database/Logging \
+            -I$AC_ROOT/src/server/game \
+            -I$AC_ROOT/src/server/game/Chat \
+            -I$AC_ROOT/src/server/game/Chat/ChatCommands \
+            -I$AC_ROOT/src/server/game/Entities/Item \
+            -I$AC_ROOT/src/server/game/Entities/Player \
+            -I$AC_ROOT/src/server/game/Entities/Object \
+            -I$AC_ROOT/src/server/game/Entities/Unit \
+            -I$AC_ROOT/src/server/game/Entities/Creature \
+            -I$AC_ROOT/src/server/game/Entities/GameObject \
+            -I$AC_ROOT/src/server/game/Entities/Corpse \
+            -I$AC_ROOT/src/server/game/Entities/DynamicObject \
+            -I$AC_ROOT/src/server/game/Entities/Pet \
+            -I$AC_ROOT/src/server/game/Entities/Vehicle \
+            -I$AC_ROOT/src/server/game/Globals \
+            -I$AC_ROOT/src/server/game/Spells \
+            -I$AC_ROOT/src/server/game/Spells/Auras \
+            -I$AC_ROOT/src/server/game/Accounts \
+            -I$AC_ROOT/src/server/game/Server \
+            -I$AC_ROOT/src/server/game/Server/Protocol \
+            -I$AC_ROOT/src/server/game/Scripting \
+            -I$AC_ROOT/src/server/game/Cache \
+            -I$AC_ROOT/src/server/game/Miscellaneous \
+            -I$AC_ROOT/src/server/shared \
+            -I$AC_ROOT/src/server/shared/Common \
+            -I$AC_ROOT/src/server/shared/DataStores \
+            -I$AC_ROOT/deps/utf8cpp/source"
           FAIL=0
           for f in *.cpp; do
             echo "=== compile $f ==="
             g++ -std=c++17 -fsyntax-only $INC "$f" 2>&1 | tee /tmp/log-$f.txt || true
-            # We tolerate warnings, but any hard error terminates the job.
             if grep -q 'error:' /tmp/log-$f.txt; then
               echo "::error file=$f::compile failure — see log"
               FAIL=1
@@ -102,17 +130,48 @@ jobs:
         env:
           TC_ROOT: ${{ github.workspace }}/tc
         run: |
-          INC="-I. -I../src/third_party -I$TC_ROOT/src/common -I$TC_ROOT/src/common/Debugging \
-               -I$TC_ROOT/src/common/Logging -I$TC_ROOT/src/common/Threading \
-               -I$TC_ROOT/src/common/Utilities -I$TC_ROOT/src/server/database \
-               -I$TC_ROOT/src/server/database/Database -I$TC_ROOT/src/server/game/Chat \
-               -I$TC_ROOT/src/server/game/Entities/Item -I$TC_ROOT/src/server/game/Entities/Player \
-               -I$TC_ROOT/src/server/game/Entities/Object \
-               -I$TC_ROOT/src/server/game/Globals \
-               -I$TC_ROOT/src/server/game/Spells -I$TC_ROOT/src/server/game/Accounts \
-               -I$TC_ROOT/src/server/game/Server \
-               -I$TC_ROOT/src/server/game/Scripting -I$TC_ROOT/src/server/shared \
-               -I$TC_ROOT/src/server/shared/Common"
+          # Include path list mirrors what TC's own CMakeLists exposes to
+          # scripts. Verified 2026-07-15 against TC 3.3.5 tree layout.
+          INC="-I. -I./third_party \
+            -I$TC_ROOT/src/common \
+            -I$TC_ROOT/src/common/Asio \
+            -I$TC_ROOT/src/common/Debugging \
+            -I$TC_ROOT/src/common/Logging \
+            -I$TC_ROOT/src/common/Threading \
+            -I$TC_ROOT/src/common/Utilities \
+            -I$TC_ROOT/src/common/Configuration \
+            -I$TC_ROOT/src/server/database \
+            -I$TC_ROOT/src/server/database/Database \
+            -I$TC_ROOT/src/server/database/Database/Implementation \
+            -I$TC_ROOT/src/server/database/Field \
+            -I$TC_ROOT/src/server/database/Logging \
+            -I$TC_ROOT/src/server/game \
+            -I$TC_ROOT/src/server/game/Chat \
+            -I$TC_ROOT/src/server/game/Chat/ChatCommands \
+            -I$TC_ROOT/src/server/game/Entities/Item \
+            -I$TC_ROOT/src/server/game/Entities/Player \
+            -I$TC_ROOT/src/server/game/Entities/Object \
+            -I$TC_ROOT/src/server/game/Entities/Unit \
+            -I$TC_ROOT/src/server/game/Entities/Creature \
+            -I$TC_ROOT/src/server/game/Entities/GameObject \
+            -I$TC_ROOT/src/server/game/Entities/Corpse \
+            -I$TC_ROOT/src/server/game/Entities/DynamicObject \
+            -I$TC_ROOT/src/server/game/Entities/Pet \
+            -I$TC_ROOT/src/server/game/Entities/Vehicle \
+            -I$TC_ROOT/src/server/game/Globals \
+            -I$TC_ROOT/src/server/game/Spells \
+            -I$TC_ROOT/src/server/game/Spells/Auras \
+            -I$TC_ROOT/src/server/game/Accounts \
+            -I$TC_ROOT/src/server/game/Server \
+            -I$TC_ROOT/src/server/game/Server/Protocol \
+            -I$TC_ROOT/src/server/game/Scripting \
+            -I$TC_ROOT/src/server/game/Cache \
+            -I$TC_ROOT/src/server/game/Miscellaneous \
+            -I$TC_ROOT/src/server/shared \
+            -I$TC_ROOT/src/server/shared/Common \
+            -I$TC_ROOT/src/server/shared/DataStores \
+            -I$TC_ROOT/dep/utf8cpp/source \
+            -I$TC_ROOT/dep/boost"
           FAIL=0
           for f in *.cpp; do
             echo "=== compile $f ==="
@@ -124,6 +183,5 @@ jobs:
           done
           if [ $FAIL -ne 0 ]; then
             echo "::warning::TC-335 preview compile broke. Update mod-character-portability-tc335/ or note in PORTING-TC335.md."
-            # continue-on-error handles the exit
             exit 1
           fi

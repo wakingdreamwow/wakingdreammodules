@@ -16,6 +16,7 @@
 #include "AccountMgr.h"
 #include "CharacterCache.h"
 #include "DatabaseEnv.h"
+#include "RBAC.h"
 
 using namespace Trinity::ChatCommands;
 
@@ -28,15 +29,19 @@ namespace WCPX
 
         ChatCommandTable GetCommands() const override
         {
+            // TC-3.3.5 requires an rbac::RBACPermissions constant instead of AC's
+            // SEC_ADMINISTRATOR. We reuse RBAC_PERM_COMMAND_RELOAD (607) as an
+            // admin-level placeholder — adopters who want finer granularity can
+            // extend TC's RBAC.h with dedicated WCPX_* permissions.
             static ChatCommandTable trustSub =
             {
-                { "list",    HandleTrustList,    SEC_ADMINISTRATOR, Console::Yes },
-                { "approve", HandleTrustApprove, SEC_ADMINISTRATOR, Console::Yes },
+                { "list",    HandleTrustList,    rbac::RBAC_PERM_COMMAND_RELOAD, Console::Yes },
+                { "approve", HandleTrustApprove, rbac::RBAC_PERM_COMMAND_RELOAD, Console::Yes },
             };
             static ChatCommandTable rootSub =
             {
-                { "export", HandleExport, SEC_ADMINISTRATOR, Console::Yes },
-                { "import", HandleImport, SEC_ADMINISTRATOR, Console::Yes },
+                { "export", HandleExport, rbac::RBAC_PERM_COMMAND_RELOAD, Console::Yes },
+                { "import", HandleImport, rbac::RBAC_PERM_COMMAND_RELOAD, Console::Yes },
                 { "trust",  trustSub },
             };
             static ChatCommandTable root =
