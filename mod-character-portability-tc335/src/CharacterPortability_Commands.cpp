@@ -104,7 +104,7 @@ namespace WCPX
 
         static bool HandleTrustList(ChatHandler* handler)
         {
-            QueryResult r = CharacterDatabase.Query(
+            QueryResult r = CharacterDatabase.PQuery(
                 "SELECT source_pubkey, source_name, source_core, seen_count, first_seen "
                 "FROM wcpx_pending_pubkeys ORDER BY first_seen DESC");
             if (!r) { handler->SendSysMessage("[WCPX] no pending pubkeys"); return true; }
@@ -130,7 +130,7 @@ namespace WCPX
                 "[WCPX] NOTE: add this pubkey to CharacterPortability.Trust.Whitelist in "
                 "character_portability.conf and reload the config for persistence.");
             Config::Instance().TrustWhitelist.push_back(pubkey);
-            CharacterDatabase.Execute(
+            CharacterDatabase.PExecute(
                 "DELETE FROM wcpx_pending_pubkeys WHERE source_pubkey='{}'", pubkey);
             return true;
         }

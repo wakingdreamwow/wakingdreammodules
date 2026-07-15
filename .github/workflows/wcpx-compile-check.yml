@@ -93,7 +93,7 @@ jobs:
           for f in *.cpp; do
             LOG=/tmp/wcpx-logs/ac-$f.log
             echo "::group::compile $f"
-            g++ -std=c++20 -fsyntax-only $INC "$f" > "$LOG" 2>&1
+            g++ -std=gnu++20 -fsyntax-only $INC "$f" > "$LOG" 2>&1
             RC=$?
             cat "$LOG"
             echo "::endgroup::"
@@ -179,7 +179,7 @@ jobs:
           for f in *.cpp; do
             LOG=/tmp/wcpx-logs/tc-$f.log
             echo "::group::compile $f"
-            g++ -std=c++20 -fsyntax-only $INC "$f" > "$LOG" 2>&1
+            g++ -std=gnu++20 -fsyntax-only $INC "$f" > "$LOG" 2>&1
             RC=$?
             cat "$LOG"
             echo "::endgroup::"

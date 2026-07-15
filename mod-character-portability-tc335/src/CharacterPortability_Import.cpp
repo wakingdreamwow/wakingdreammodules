@@ -143,7 +143,7 @@ namespace WCPX
         if (cfg.TrustMode == "tofu")
         {
             // Record for admin review; reject THIS import; return false.
-            CharacterDatabase.Execute(
+            CharacterDatabase.PExecute(
                 "INSERT INTO wcpx_pending_pubkeys (source_pubkey, source_name, source_core, source_contact) "
                 "VALUES ('{}', '{}', '{}', '{}') "
                 "ON DUPLICATE KEY UPDATE seen_count = seen_count + 1",
@@ -156,7 +156,7 @@ namespace WCPX
 
     bool AlreadyConsumed(std::string const& fileId, std::string const& pubB64)
     {
-        QueryResult r = CharacterDatabase.Query(
+        QueryResult r = CharacterDatabase.PQuery(
             "SELECT 1 FROM wcpx_imported_files WHERE file_id='{}' AND source_pubkey='{}'",
             fileId, pubB64);
         return r != nullptr;
@@ -199,7 +199,7 @@ namespace WCPX
             std::string candidate = (i == 0) ? name : (name + letterSuffix(i - 1));
             // Keep within WoW's 12-char limit.
             if (candidate.size() > 12) candidate = candidate.substr(0, 12);
-            QueryResult ex = CharacterDatabase.Query(
+            QueryResult ex = CharacterDatabase.PQuery(
                 "SELECT 1 FROM characters WHERE name='{}'", candidate);
             if (!ex)
             {
@@ -284,7 +284,7 @@ namespace WCPX
         //   equipmentCache — 46 values = 23 slots x (itemId, enchantId)
         //   exploredZones  — 128 values (PLAYER_EXPLORED_ZONES_SIZE, WotLK)
         // Use REPEAT() so the widths match AC exactly.
-        CharacterDatabase.Execute(
+        CharacterDatabase.PExecute(
             "INSERT INTO characters "
             "(guid, account, name, race, class, gender, level, xp, "
             " skin, face, hairStyle, hairColor, facialStyle, "
@@ -305,7 +305,7 @@ namespace WCPX
             level * 100);
 
         // Write homebind so hearthstone works after import.
-        CharacterDatabase.Execute(
+        CharacterDatabase.PExecute(
             "REPLACE INTO character_homebind (guid, mapId, zoneId, posX, posY, posZ) "
             "VALUES ({}, {}, {}, {}, {}, {})",
             newGuid, bindMap, bindZone, bindX, bindY, bindZ);
@@ -335,7 +335,7 @@ namespace WCPX
             {
                 if (sSpellStore.LookupEntry(sid))
                 {
-                    CharacterDatabase.Execute(
+                    CharacterDatabase.PExecute(
                         "INSERT IGNORE INTO character_spell (guid, spell, specMask) "
                         "VALUES ({}, {}, 1)", newGuid, sid);
                     spellsInserted++;
@@ -360,7 +360,7 @@ namespace WCPX
             for (auto it = begin; it != end; ++it)
             {
                 uint32_t achId = std::stoul((*it)[2].str());
-                CharacterDatabase.Execute(
+                CharacterDatabase.PExecute(
                     "INSERT IGNORE INTO character_achievement (guid, achievement, date) "
                     "VALUES ({}, {}, UNIX_TIMESTAMP())", newGuid, achId);
                 achievementsInserted++;
@@ -381,7 +381,7 @@ namespace WCPX
                 uint32_t fid  = std::stoul((*it)[1].str());
                 uint32_t flag = std::stoul((*it)[2].str());
                 int32_t stand = std::stol((*it)[3].str());
-                CharacterDatabase.Execute(
+                CharacterDatabase.PExecute(
                     "INSERT IGNORE INTO character_reputation (guid, faction, standing, flags) "
                     "VALUES ({}, {}, {}, {})", newGuid, fid, stand, flag);
             }
@@ -400,7 +400,7 @@ namespace WCPX
                 uint32_t maxV = std::stoul((*it)[1].str());
                 uint32_t sid  = std::stoul((*it)[2].str());
                 uint32_t val  = std::stoul((*it)[3].str());
-                CharacterDatabase.Execute(
+                CharacterDatabase.PExecute(
                     "INSERT IGNORE INTO character_skills (guid, skill, value, max) "
                     "VALUES ({}, {}, {}, {})", newGuid, sid, val, maxV);
             }
@@ -420,7 +420,7 @@ namespace WCPX
                 uint32_t spell = std::stoul((*it)[3].str());
                 uint32_t spec  = std::stoul((*it)[2].str());
                 uint8_t specMask = (spec == 0) ? 0x01 : 0x02;
-                CharacterDatabase.Execute(
+                CharacterDatabase.PExecute(
                     "INSERT IGNORE INTO character_talent (guid, spell, specMask) "
                     "VALUES ({}, {}, {})", newGuid, spell, (unsigned)specMask);
                 talentsInserted++;
@@ -447,13 +447,13 @@ namespace WCPX
                     uint32_t slot   = std::stoul((*it)[2].str());
                     if (!sObjectMgr->GetItemTemplate(itemId)) { eqSkipped++; continue; }
                     uint32_t itemGuid = sObjectMgr->GetGenerator<HighGuid::Item>().Generate();
-                    CharacterDatabase.Execute(
+                    CharacterDatabase.PExecute(
                         "INSERT INTO item_instance "
                         "(guid, itemEntry, owner_guid, creatorGuid, giftCreatorGuid, count, duration, "
                         " flags, enchantments, randomPropertyId, durability, playedTime) "
                         "VALUES ({}, {}, {}, 0, 0, 1, 0, 0, '{}', 0, 0, 0)",
                         itemGuid, itemId, newGuid, std::string(ENCHANT_EMPTY));
-                    CharacterDatabase.Execute(
+                    CharacterDatabase.PExecute(
                         "INSERT INTO character_inventory (guid, bag, slot, item) "
                         "VALUES ({}, 0, {}, {})",
                         newGuid, slot, itemGuid);
@@ -569,7 +569,7 @@ namespace WCPX
         if (!newGuid) { res.errorMessage = err; return res; }
 
         // 7. Record consumption
-        CharacterDatabase.Execute(
+        CharacterDatabase.PExecute(
             "INSERT INTO wcpx_imported_files (file_id, source_pubkey, account_id, character_id, source_name) "
             "VALUES ('{}', '{}', {}, {}, '{}')",
             fileId, pubB64, req.targetAccountId, newGuid, sourceName);

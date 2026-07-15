@@ -91,7 +91,7 @@ namespace WCPX
         if (bypass) return true;
         auto& cfg = Config::Instance();
         if (cfg.ExportFreePerMonth == 0) return false; // paid-only server
-        QueryResult r = CharacterDatabase.Query(
+        QueryResult r = CharacterDatabase.PQuery(
             "SELECT COUNT(*) FROM wcpx_export_log "
             "WHERE account_id={} AND was_paid=0 "
             "AND exported_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)",
@@ -106,7 +106,7 @@ namespace WCPX
     // doesn't matter.
     static std::string BuildPayload(uint32_t guid, std::string& errorOut)
     {
-        QueryResult r = CharacterDatabase.Query(
+        QueryResult r = CharacterDatabase.PQuery(
             "SELECT name, race, class, gender, level, xp, totaltime, leveltime, "
             "       skin, face, hairStyle, hairColor, facialStyle, "
             "       activeTalentGroup "
@@ -132,7 +132,7 @@ namespace WCPX
         // Homebind (separate table in AC / TC-335 / cMaNGOS)
         uint32_t bindMap = 0, bindZone = 0;
         float bx = 0.f, by = 0.f, bz = 0.f;
-        if (QueryResult hb = CharacterDatabase.Query(
+        if (QueryResult hb = CharacterDatabase.PQuery(
                 "SELECT mapId, zoneId, posX, posY, posZ FROM character_homebind WHERE guid={}", guid))
         {
             auto hbrow = hb->Fetch();
@@ -177,7 +177,7 @@ namespace WCPX
         // Talents
         j << "\"talents\":[";
         {
-            QueryResult t = CharacterDatabase.Query(
+            QueryResult t = CharacterDatabase.PQuery(
                 "SELECT spell, specMask FROM character_talent WHERE guid={}", guid);
             bool first = true;
             if (t) do
@@ -196,7 +196,7 @@ namespace WCPX
         // Spells
         j << "\"spells\":[";
         {
-            QueryResult s = CharacterDatabase.Query(
+            QueryResult s = CharacterDatabase.PQuery(
                 "SELECT spell FROM character_spell WHERE guid={}", guid);
             bool first = true;
             if (s) do
@@ -212,7 +212,7 @@ namespace WCPX
         // Achievements
         j << "\"achievements\":[";
         {
-            QueryResult a = CharacterDatabase.Query(
+            QueryResult a = CharacterDatabase.PQuery(
                 "SELECT achievement, date FROM character_achievement WHERE guid={}", guid);
             bool first = true;
             if (a) do
@@ -239,7 +239,7 @@ namespace WCPX
         // Reputation
         j << "\"reputation\":[";
         {
-            QueryResult rep = CharacterDatabase.Query(
+            QueryResult rep = CharacterDatabase.PQuery(
                 "SELECT faction, standing, flags FROM character_reputation WHERE guid={}", guid);
             bool first = true;
             if (rep) do
@@ -257,7 +257,7 @@ namespace WCPX
         // Skills
         j << "\"skills\":[";
         {
-            QueryResult sk = CharacterDatabase.Query(
+            QueryResult sk = CharacterDatabase.PQuery(
                 "SELECT skill, value, max FROM character_skills WHERE guid={}", guid);
             bool first = true;
             if (sk) do
@@ -276,7 +276,7 @@ namespace WCPX
         if (Config::Instance().ExportIncludeEquipment)
         {
             j << "\"equipment\":[";
-            QueryResult eq = CharacterDatabase.Query(
+            QueryResult eq = CharacterDatabase.PQuery(
                 "SELECT ci.slot, ii.itemEntry FROM character_inventory ci "
                 "JOIN item_instance ii ON ii.guid=ci.item "
                 "WHERE ci.guid={} AND ci.bag=0 AND ci.slot<19 "
@@ -297,7 +297,7 @@ namespace WCPX
         // Emit as array of set bit indices.
         j << "\"titles\":[";
         {
-            QueryResult tt = CharacterDatabase.Query(
+            QueryResult tt = CharacterDatabase.PQuery(
                 "SELECT knownTitles FROM characters WHERE guid={}", guid);
             bool first = true;
             if (tt)
@@ -395,7 +395,7 @@ namespace WCPX
         { res.errorMessage = "invalid arguments"; return res; }
 
         // Resolve account
-        QueryResult acc = CharacterDatabase.Query(
+        QueryResult acc = CharacterDatabase.PQuery(
             "SELECT account FROM characters WHERE guid={}", req.characterGuid);
         if (!acc) { res.errorMessage = "character not found"; return res; }
         uint32_t accountId = acc->Fetch()[0].GetUInt32();
@@ -469,7 +469,7 @@ namespace WCPX
         { res.errorMessage = "write failed"; return res; }
 
         // Log usage
-        CharacterDatabase.Execute(
+        CharacterDatabase.PExecute(
             "INSERT INTO wcpx_export_log (account_id, character_id, file_id, was_paid) "
             "VALUES ({}, {}, '{}', {})",
             accountId, req.characterGuid, fileId, req.bypassRateLimit ? 1 : 0);

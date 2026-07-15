@@ -328,7 +328,7 @@ namespace WCPX
 
     void HandleTrustPending(httplib::Request const&, httplib::Response& res)
     {
-        QueryResult q = CharacterDatabase.Query(
+        QueryResult q = CharacterDatabase.PQuery(
             "SELECT source_pubkey, source_name, source_core, source_contact, "
             "       first_seen, seen_count "
             "FROM wcpx_pending_pubkeys ORDER BY first_seen DESC");
@@ -362,7 +362,7 @@ namespace WCPX
             return;
         }
         Config::Instance().TrustWhitelist.push_back(pubkey);
-        CharacterDatabase.Execute(
+        CharacterDatabase.PExecute(
             "DELETE FROM wcpx_pending_pubkeys WHERE source_pubkey='{}'", pubkey);
         std::ostringstream j;
         j << "{\"ok\":true,\"persist_hint\":"
