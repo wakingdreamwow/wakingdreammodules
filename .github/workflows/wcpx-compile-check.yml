@@ -40,7 +40,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             g++ libssl-dev libboost-all-dev libbz2-dev libmariadb-dev \
-            libreadline-dev cmake libargon2-dev git
+            libreadline-dev cmake libargon2-dev libfmt-dev git
 
       - name: Shallow clone AzerothCore
         run: git clone --depth 1 https://github.com/azerothcore/azerothcore-wotlk.git ac
@@ -60,10 +60,16 @@ jobs:
           # Build INCLUDE_ARGS dynamically: -I every directory under src/ and deps/
           # that contains at least one header. Mirrors what AC's own CMakeLists.txt
           # does via CollectIncludeDirectories.
+          # Prune platform-specific / MSVC-shim dirs — they shadow libc headers
+          # with Windows-only #error stubs on Linux.
           INC="-I. -I./third_party"
           while IFS= read -r d; do
+            case "$d" in
+              */msvc_compat*|*/windows/*|*/win32/*|*/Win32/*|*/vc/*|*/msvc/*|*/darwin/*|*/mac/*) continue ;;
+            esac
             INC="$INC -I$d"
-          done < <(find "$AC_ROOT/src" "$AC_ROOT/deps" -type d \( -name node_modules -o -name .git \) -prune -o \
+          done < <(find "$AC_ROOT/src" "$AC_ROOT/deps" \
+                        -type d \( -name node_modules -o -name .git -o -name msvc_compat -o -name Win32 -o -name win32 -o -name windows \) -prune -o \
                         -type f \( -name '*.h' -o -name '*.hpp' \) -printf '%h\n' 2>/dev/null | sort -u)
 
           echo "::group::Include path summary"
@@ -118,7 +124,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             g++ libssl-dev libboost-all-dev libbz2-dev libmariadb-dev \
-            libreadline-dev cmake libargon2-dev git
+            libreadline-dev cmake libargon2-dev libfmt-dev git
 
       - name: Shallow clone TrinityCore 3.3.5
         run: git clone --depth 1 -b 3.3.5 https://github.com/TrinityCore/TrinityCore.git tc
@@ -136,8 +142,12 @@ jobs:
 
           INC="-I. -I./third_party"
           while IFS= read -r d; do
+            case "$d" in
+              */msvc_compat*|*/windows/*|*/win32/*|*/Win32/*|*/vc/*|*/msvc/*|*/darwin/*|*/mac/*) continue ;;
+            esac
             INC="$INC -I$d"
-          done < <(find "$TC_ROOT/src" "$TC_ROOT/dep" -type d \( -name node_modules -o -name .git \) -prune -o \
+          done < <(find "$TC_ROOT/src" "$TC_ROOT/dep" \
+                        -type d \( -name node_modules -o -name .git -o -name msvc_compat -o -name Win32 -o -name win32 -o -name windows \) -prune -o \
                         -type f \( -name '*.h' -o -name '*.hpp' \) -printf '%h\n' 2>/dev/null | sort -u)
 
           echo "::group::Include path summary"
