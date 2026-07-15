@@ -229,6 +229,92 @@ namespace WCPX
         res.set_content(j.str(), "application/json");
     }
 
+    void HandlePreview(httplib::Request const& req, httplib::Response& res)
+    {
+        auto fileField = req.get_file_value("file");
+        if (fileField.content.empty())
+        { JsonError(res, 400, "bad_request", "missing 'file'"); return; }
+        std::string passphrase = req.get_file_value("passphrase").content;
+        if (passphrase.empty())
+        { JsonError(res, 400, "bad_request", "missing passphrase"); return; }
+
+        PreviewRequest preq;
+        preq.bytes.assign(fileField.content.begin(), fileField.content.end());
+        preq.passphrase = passphrase;
+        auto r = DoPreview(preq);
+        if (!r.ok)
+        {
+            int status = 400;
+            std::string code = "preview_failed";
+            if (r.errorMessage.find("passphrase") != std::string::npos)
+                { status = 400; code = "wrong_passphrase"; }
+            else if (r.errorMessage.find("signature") != std::string::npos)
+                { status = 400; code = "bad_signature"; }
+            JsonError(res, status, code, r.errorMessage);
+            return;
+        }
+
+        // JSON string escape helper
+        auto esc = [](std::string const& s) -> std::string {
+            std::string out;
+            for (char c : s) {
+                if (c == '"') out += "\\\"";
+                else if (c == '\\') out += "\\\\";
+                else if (c == '\n') out += "\\n";
+                else out += c;
+            }
+            return out;
+        };
+
+        std::ostringstream j;
+        j << "{"
+          << "\"ok\":true,"
+          << "\"file_id\":\"" << esc(r.fileId) << "\","
+          << "\"issued_at\":\"" << esc(r.issuedAt) << "\","
+          << "\"source_name\":\"" << esc(r.sourceName) << "\","
+          << "\"source_core\":\"" << esc(r.sourceCore) << "\","
+          << "\"source_pubkey\":\"" << esc(r.sourcePubkey) << "\","
+          << "\"source_trusted\":" << (r.sourceTrusted ? "true" : "false") << ","
+          << "\"already_imported\":" << (r.alreadyImported ? "true" : "false") << ","
+          << "\"character\":{"
+            << "\"name\":\"" << esc(r.charName) << "\","
+            << "\"race\":" << r.race << ","
+            << "\"class\":" << r.cls << ","
+            << "\"gender\":" << r.gender << ","
+            << "\"level\":" << r.level << ","
+            << "\"faction\":\"" << esc(r.faction) << "\""
+          << "},"
+          << "\"counts\":{"
+            << "\"spells\":"       << r.spellCount << ","
+            << "\"achievements\":" << r.achievementCount << ","
+            << "\"talents\":"      << r.talentCount << ","
+            << "\"reputation\":"   << r.reputationCount << ","
+            << "\"skills\":"       << r.skillCount << ","
+            << "\"titles\":"       << r.titleCount
+          << "},"
+          << "\"equipment\":[";
+        bool first = true;
+        for (auto const& e : r.equipment)
+        {
+            if (!first) j << ",";
+            first = false;
+            j << "{\"slot\":" << e.slot
+              << ",\"item_id\":" << e.itemId
+              << ",\"item_name\":\"" << esc(e.itemName) << "\"}";
+        }
+        j << "],"
+          << "\"warnings\":[";
+        first = true;
+        for (auto const& w : r.warnings)
+        {
+            if (!first) j << ",";
+            first = false;
+            j << "\"" << esc(w) << "\"";
+        }
+        j << "]}";
+        res.set_content(j.str(), "application/json");
+    }
+
     void HandleTrustPending(httplib::Request const&, httplib::Response& res)
     {
         QueryResult q = CharacterDatabase.Query(
@@ -303,6 +389,7 @@ namespace WCPX
 
         g_server->Get ("/wcpx/v1/status",         HandleStatus);
         g_server->Post("/wcpx/v1/export",         authWrap(HandleExport));
+        g_server->Post("/wcpx/v1/preview",        authWrap(HandlePreview));
         g_server->Post("/wcpx/v1/import",         authWrap(HandleImport));
         g_server->Get ("/wcpx/v1/trust/pending",  authWrap(HandleTrustPending));
         g_server->Post("/wcpx/v1/trust/approve",  authWrap(HandleTrustApprove));

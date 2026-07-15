@@ -42,6 +42,9 @@ namespace WCPX
         ImportMaxAgeDays = sConfigMgr->GetOption<uint32_t>("CharacterPortability.Import.MaxAgeDays", 0);
         ImportRejectOverLevel = sConfigMgr->GetOption<int32_t>("CharacterPortability.Import.RejectOverLevel", 0) != 0;
 
+        ExportIncludeEquipment = sConfigMgr->GetOption<int32_t>("CharacterPortability.Export.IncludeEquipment", 1) != 0;
+        ImportAcceptEquipment  = sConfigMgr->GetOption<int32_t>("CharacterPortability.Import.AcceptEquipment",  1) != 0;
+
         Argon2TimeCost = sConfigMgr->GetOption<uint32_t>("CharacterPortability.Argon2.TimeCost", 3);
         Argon2MemoryKB = sConfigMgr->GetOption<uint32_t>("CharacterPortability.Argon2.MemoryCostKB", 65536);
         Argon2Parallel = sConfigMgr->GetOption<uint32_t>("CharacterPortability.Argon2.Parallelism", 4);

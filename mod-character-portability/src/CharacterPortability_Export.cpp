@@ -272,6 +272,27 @@ namespace WCPX
         }
         j << "],";
 
+        // Equipment (equipped slots 0-18) — optional, no enchants/gems.
+        if (Config::Instance().ExportIncludeEquipment)
+        {
+            j << "\"equipment\":[";
+            QueryResult eq = CharacterDatabase.Query(
+                "SELECT ci.slot, ii.itemEntry FROM character_inventory ci "
+                "JOIN item_instance ii ON ii.guid=ci.item "
+                "WHERE ci.guid={} AND ci.bag=0 AND ci.slot<19 "
+                "ORDER BY ci.slot", guid);
+            bool first = true;
+            if (eq) do
+            {
+                auto er = eq->Fetch();
+                if (!first) j << ",";
+                first = false;
+                j << "{\"slot\":" << (int)er[0].Get<uint8_t>()
+                  << ",\"item_id\":" << er[1].Get<uint32_t>() << "}";
+            } while (eq->NextRow());
+            j << "],";
+        }
+
         // Titles: known titles are stored bit-packed in characters.knownTitles.
         // Emit as array of set bit indices.
         j << "\"titles\":[";

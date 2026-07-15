@@ -22,6 +22,7 @@
 #include "Player.h"
 #include "World.h"
 #include "DBCStores.h"
+#include "CharacterCache.h"
 
 #include <regex>
 #include <sstream>
@@ -178,17 +179,41 @@ namespace WCPX
         p.GetInt("character.played_level_seconds", playedLevel);
 
         // Name normalization + collision handling.
+        // WoW 3.3.5a client rejects character names containing digits or
+        // non-letter characters at login. On collision we suffix with letters
+        // (a, b, c, ..., aa, ab, ...) and set AT_LOGIN_RENAME so the player
+        // can choose a permanent name at first login.
         if (name.empty()) { errorOut = "missing name"; return 0; }
-        // Check target-server-side uniqueness.
-        for (int suffix = 0; suffix < 100; ++suffix)
+        bool collided = false;
+        auto letterSuffix = [](int n) -> std::string {
+            // 0 -> "a", 1 -> "b", ..., 25 -> "z", 26 -> "aa", 27 -> "ab", ...
+            std::string s;
+            do { s.insert(s.begin(), 'a' + (n % 26)); n = n / 26 - 1; } while (n >= 0);
+            return s;
+        };
+        for (int i = 0; i < 100; ++i)
         {
-            std::string candidate = suffix == 0 ? name : (name + std::to_string(suffix));
+            std::string candidate = (i == 0) ? name : (name + letterSuffix(i - 1));
+            // Keep within WoW's 12-char limit.
+            if (candidate.size() > 12) candidate = candidate.substr(0, 12);
             QueryResult ex = CharacterDatabase.Query(
                 "SELECT 1 FROM characters WHERE name='{}'", candidate);
-            if (!ex) { name = candidate; goto name_ok; }
+            if (!ex)
+            {
+                if (candidate != name) collided = true;
+                name = candidate;
+                goto name_ok;
+            }
         }
-        errorOut = "name collision"; return 0;
+        errorOut = "name collision (no unique letter suffix within 100 tries)"; return 0;
         name_ok:;
+        // Always force the player to pick a name at first login. This gives
+        // them full agency over their identity on the target server (they may
+        // want a different name here anyway) and cleanly handles the
+        // collision case where we had to suffix a letter to insert the row.
+        // AT_LOGIN_RENAME = bit 1.
+        (void)collided;   // no longer branches on this
+        uint32_t atLoginFlags = 1;
 
         // Level clamp per policy
         auto& cfg = Config::Instance();
@@ -241,24 +266,39 @@ namespace WCPX
         // The full row insertion is intentionally minimal; a real integration
         // will call Player::Create() with an equivalent PlayerCreateInfo. This
         // block ONLY writes fields that map 1:1 from the WCPX payload plus
-        // the minimum set of NOT-NULL-without-default columns AC requires
-        // (taximask, innTriggerId) and a spawn location.
+        // the minimum text/scalar columns AC requires the client to see
+        // during login.
+        //
+        // The full row insertion is intentionally minimal; a real integration
+        // will call Player::Create() with an equivalent PlayerCreateInfo. This
+        // block ONLY writes fields that map 1:1 from the WCPX payload plus
+        // the minimum text/scalar columns AC requires the client to see
+        // during login.
+        //
+        // Wrong-length text fields crash the client at login (silent
+        // disconnect). AC 3.3.5a expects exactly:
+        //   taximask       — 14 space-separated uint32s (TaxiMask::Length())
+        //   equipmentCache — 46 values = 23 slots x (itemId, enchantId)
+        //   exploredZones  — 128 values (PLAYER_EXPLORED_ZONES_SIZE, WotLK)
+        // Use REPEAT() so the widths match AC exactly.
         CharacterDatabase.Execute(
             "INSERT INTO characters "
             "(guid, account, name, race, class, gender, level, xp, "
             " skin, face, hairStyle, hairColor, facialStyle, "
             " position_x, position_y, position_z, orientation, map, zone, "
-            " totaltime, leveltime, at_login, "
-            " taximask, innTriggerId, health, power1, activeTalentGroup, talentGroupsCount) "
+            " totaltime, leveltime, at_login, cinematic, watchedFaction, "
+            " taximask, innTriggerId, health, power1, activeTalentGroup, talentGroupsCount, "
+            " equipmentCache, exploredZones, knownTitles) "
             "VALUES ({}, {}, '{}', {}, {}, {}, {}, {}, "
             " {}, {}, {}, {}, {}, "
             " {}, {}, {}, 0, {}, {}, "
-            " {}, {}, 0, "
-            " '0 0 0 0 0 0 0 0', 0, {}, 100, 0, 2)",
+            " {}, {}, {}, 1, 4294967295, "
+            " REPEAT('0 ', 14), 0, {}, 100, 0, 2, "
+            " REPEAT('0 ', 46), REPEAT('0 ', 128), REPEAT('0 ', 6))",
             newGuid, accountId, name, race, cls, gender, level, xp,
             cSkin, cFace, cHair, cHairColor, cFacial,
             spawnX, spawnY, spawnZ, spawnMap, spawnZone,
-            played, playedLevel,
+            played, playedLevel, atLoginFlags,
             level * 100);
 
         // Write homebind so hearthstone works after import.
@@ -266,6 +306,17 @@ namespace WCPX
             "REPLACE INTO character_homebind (guid, mapId, zoneId, posX, posY, posZ) "
             "VALUES ({}, {}, {}, {}, {}, {})",
             newGuid, bindMap, bindZone, bindX, bindY, bindZ);
+
+        // Register the newly-created character in the in-memory cache so the
+        // first login after import sees it. Without this the client gets a
+        // disconnect and only sees the char after a full re-login cycle.
+        sCharacterCache->AddCharacterCacheEntry(
+            ObjectGuid::Create<HighGuid::Player>(newGuid),
+            accountId, name,
+            static_cast<uint8>(gender),
+            static_cast<uint8>(race),
+            static_cast<uint8>(cls),
+            static_cast<uint8>(level));
 
         // Spells
         std::regex spellRe("\"spells\"\\s*:\\s*\\[([^\\]]*)\\]");
@@ -373,6 +424,42 @@ namespace WCPX
             }
         }
         LOG_INFO("module", "[WCPX] import: talents inserted={}", talentsInserted);
+
+        // Equipment (optional, base items only — no enchants/gems)
+        if (cfg.ImportAcceptEquipment)
+        {
+            static const char* ENCHANT_EMPTY =
+                "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0";
+            std::regex eqRe("\"equipment\"\\s*:\\s*\\[([^\\]]*)\\]");
+            int eqInserted = 0, eqSkipped = 0;
+            if (std::regex_search(payloadJson, sm, eqRe))
+            {
+                std::string body = sm[1];
+                std::regex objRe("\\{\"item_id\":(\\d+),\"slot\":(\\d+)\\}");
+                auto it = std::sregex_iterator(body.begin(), body.end(), objRe);
+                auto endIt = std::sregex_iterator();
+                for (; it != endIt; ++it)
+                {
+                    uint32_t itemId = std::stoul((*it)[1].str());
+                    uint32_t slot   = std::stoul((*it)[2].str());
+                    if (!sObjectMgr->GetItemTemplate(itemId)) { eqSkipped++; continue; }
+                    uint32_t itemGuid = sObjectMgr->GetGenerator<HighGuid::Item>().Generate();
+                    CharacterDatabase.Execute(
+                        "INSERT INTO item_instance "
+                        "(guid, itemEntry, owner_guid, creatorGuid, giftCreatorGuid, count, duration, "
+                        " flags, enchantments, randomPropertyId, durability, playedTime) "
+                        "VALUES ({}, {}, {}, 0, 0, 1, 0, 0, '{}', 0, 0, 0)",
+                        itemGuid, itemId, newGuid, std::string(ENCHANT_EMPTY));
+                    CharacterDatabase.Execute(
+                        "INSERT INTO character_inventory (guid, bag, slot, item) "
+                        "VALUES ({}, 0, {}, {})",
+                        newGuid, slot, itemGuid);
+                    eqInserted++;
+                }
+            }
+            LOG_INFO("module", "[WCPX] import: equipment inserted={} skipped={}",
+                     eqInserted, eqSkipped);
+        }
 
         return newGuid;
     }
@@ -488,6 +575,159 @@ namespace WCPX
         res.newCharacterGuid = newGuid;
         LOG_INFO("module", "[WCPX] imported char '{}' as guid={} from source '{}'",
                  fileId, newGuid, sourceName);
+        return res;
+    }
+
+    // --- Preview -----------------------------------------------------------
+    // Does everything DoImport does BEFORE ApplyPayload — verify signature,
+    // check trust, decrypt payload — then instead of writing to DB, returns
+    // a summary the CMS can show to the player before payment.
+    PreviewResult DoPreview(PreviewRequest const& req)
+    {
+        PreviewResult res;
+
+        WcpxFile file;
+        std::string err;
+        if (!req.filePath.empty())
+        {
+            if (!Codec::ReadFile(req.filePath, file, err))
+            { res.errorMessage = "read failed: " + err; return res; }
+        }
+        else if (!req.bytes.empty())
+        {
+            if (!Codec::ReadBytes(req.bytes, file, err))
+            { res.errorMessage = "read failed: " + err; return res; }
+        }
+        else
+        { res.errorMessage = "no input"; return res; }
+
+        HeaderReader hr(file.headerJson);
+        std::string wcpxVer, sigB64, saltB64, ivB64;
+        int64_t tCost = 3, mCost = 65536, par = 4;
+        hr.GetString("wcpx", wcpxVer);
+        if (wcpxVer != "1.0")
+        { res.errorMessage = "unsupported WCPX version: " + wcpxVer; return res; }
+        hr.GetString("file_id", res.fileId);
+        hr.GetString("source.pubkey", res.sourcePubkey);
+        hr.GetString("source.name", res.sourceName);
+        hr.GetString("source.core", res.sourceCore);
+        hr.GetString("issued_at", res.issuedAt);
+        hr.GetString("signature.value", sigB64);
+        hr.GetString("encryption.kdf_salt", saltB64);
+        hr.GetString("encryption.iv", ivB64);
+        hr.GetInt("encryption.kdf_time_cost", tCost);
+        hr.GetInt("encryption.kdf_memory_cost", mCost);
+        hr.GetInt("encryption.kdf_parallelism", par);
+
+        if (res.fileId.empty() || res.sourcePubkey.empty() || sigB64.empty())
+        { res.errorMessage = "malformed header"; return res; }
+
+        // Verify signature
+        std::vector<uint8_t> pubRaw, sigRaw;
+        if (!Crypto::Base64Decode(res.sourcePubkey, pubRaw) || pubRaw.size() != 32)
+        { res.errorMessage = "bad pubkey encoding"; return res; }
+        if (!Crypto::Base64Decode(sigB64, sigRaw))
+        { res.errorMessage = "bad signature encoding"; return res; }
+        std::string canonHeader = Codec::CanonicalizeJson(file.headerJson);
+        std::string canonNoSig = StripSignature(canonHeader);
+        std::vector<uint8_t> sigInput;
+        static const char prefix[] = "wcpx-v1\n";
+        sigInput.insert(sigInput.end(), prefix, prefix + sizeof(prefix) - 1);
+        sigInput.insert(sigInput.end(), canonNoSig.begin(), canonNoSig.end());
+        sigInput.push_back('\n');
+        sigInput.insert(sigInput.end(), file.payloadCiphertext.begin(), file.payloadCiphertext.end());
+        sigInput.insert(sigInput.end(), file.payloadTag.begin(), file.payloadTag.end());
+        if (!Crypto::Verify(pubRaw, sigInput, sigRaw))
+        { res.errorMessage = "signature invalid"; return res; }
+
+        // Replay + trust checks: treat as WARNINGS for preview, not fatal.
+        res.alreadyImported = AlreadyConsumed(res.fileId, res.sourcePubkey);
+        if (res.alreadyImported)
+            res.warnings.push_back("This file has already been imported on this server; the import will be rejected.");
+        std::string sourceContact;
+        hr.GetString("source.contact", sourceContact);
+        res.sourceTrusted = CheckTrust(res.sourcePubkey, res.sourceName, res.sourceCore, sourceContact);
+        if (!res.sourceTrusted)
+            res.warnings.push_back("Source server public key is not in the trust list; the import will be rejected.");
+
+        // Decrypt
+        std::vector<uint8_t> salt, iv;
+        if (!Crypto::Base64Decode(saltB64, salt) || salt.empty())
+        { res.errorMessage = "bad salt"; return res; }
+        if (!Crypto::Base64Decode(ivB64, iv) || iv.size() != 12)
+        { res.errorMessage = "bad iv"; return res; }
+        auto key = Crypto::DeriveKey(req.passphrase, salt,
+                                     static_cast<uint32_t>(tCost),
+                                     static_cast<uint32_t>(mCost),
+                                     static_cast<uint32_t>(par));
+        if (key.empty()) { res.errorMessage = "kdf failed"; return res; }
+        std::vector<uint8_t> pt;
+        if (!Crypto::AeadDecrypt(key, iv, {}, file.payloadCiphertext, file.payloadTag, pt))
+        { res.errorMessage = "wrong passphrase or tampered payload"; return res; }
+        std::string payload(pt.begin(), pt.end());
+        std::string canonPayload = Codec::CanonicalizeJson(payload);
+        if (canonPayload.empty())
+        { res.errorMessage = "payload not valid JSON"; return res; }
+
+        // Parse summary fields
+        HeaderReader p(canonPayload);
+        p.GetString("character.name", res.charName);
+        int64_t v = 0;
+        if (p.GetInt("character.race",   v)) res.race   = (uint32_t)v;
+        if (p.GetInt("character.class",  v)) res.cls    = (uint32_t)v;
+        if (p.GetInt("character.gender", v)) res.gender = (uint32_t)v;
+        if (p.GetInt("character.level",  v)) res.level  = (uint32_t)v;
+        p.GetString("character.faction", res.faction);
+
+        auto countObjs = [&](std::string const& key) -> uint32_t {
+            std::regex arrRe("\"" + key + "\"\\s*:\\s*\\[([^\\]]*)\\]");
+            std::smatch m;
+            if (!std::regex_search(canonPayload, m, arrRe)) return 0;
+            std::string body = m[1];
+            if (body.empty()) return 0;
+            // Count `{` (works for object arrays) or commas+1 (for scalar arrays).
+            if (body.find('{') != std::string::npos)
+                return static_cast<uint32_t>(std::count(body.begin(), body.end(), '{'));
+            return static_cast<uint32_t>(std::count(body.begin(), body.end(), ',') + 1);
+        };
+        res.spellCount       = countObjs("spells");
+        res.achievementCount = countObjs("achievements");
+        res.talentCount      = countObjs("talents");
+        res.reputationCount  = countObjs("reputation");
+        res.skillCount       = countObjs("skills");
+        res.titleCount       = countObjs("titles");
+
+        // Equipment names — look up item_template for each entry
+        std::regex eqRe("\"equipment\"\\s*:\\s*\\[([^\\]]*)\\]");
+        std::smatch eqm;
+        if (std::regex_search(canonPayload, eqm, eqRe))
+        {
+            std::string body = eqm[1];
+            std::regex objRe("\\{\"item_id\":(\\d+),\"slot\":(\\d+)\\}");
+            auto it = std::sregex_iterator(body.begin(), body.end(), objRe);
+            auto endIt = std::sregex_iterator();
+            for (; it != endIt; ++it)
+            {
+                PreviewEquipItem e;
+                e.itemId = static_cast<uint32_t>(std::stoul((*it)[1].str()));
+                e.slot   = static_cast<uint32_t>(std::stoul((*it)[2].str()));
+                if (ItemTemplate const* it_t = sObjectMgr->GetItemTemplate(e.itemId))
+                    e.itemName = it_t->Name1;
+                else
+                    res.warnings.push_back("Equipment item " + std::to_string(e.itemId) +
+                                           " not found on this server; will be dropped.");
+                res.equipment.push_back(std::move(e));
+            }
+        }
+
+        // Level clamp warning
+        int32_t levelCap = sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL);
+        if ((int64_t)res.level > levelCap)
+            res.warnings.push_back("Exported level " + std::to_string(res.level) +
+                                   " exceeds this server's cap of " + std::to_string(levelCap) +
+                                   "; character will be clamped or rejected per policy.");
+
+        res.ok = true;
         return res;
     }
 }

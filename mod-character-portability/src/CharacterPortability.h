@@ -45,6 +45,10 @@ namespace WCPX
         uint32_t ImportMaxAgeDays = 0;
         bool ImportRejectOverLevel = false;
 
+        // Equipment carry-over (equipped slots only, no enchants/gems)
+        bool ExportIncludeEquipment = true;
+        bool ImportAcceptEquipment  = true;
+
         // Argon2id
         uint32_t Argon2TimeCost   = 3;
         uint32_t Argon2MemoryKB   = 65536;
@@ -163,6 +167,49 @@ namespace WCPX
         uint32_t newCharacterGuid = 0;
     };
     ImportResult DoImport(ImportRequest const& req);
+
+    // ------------------------------------------------------------------------
+    // Preview — decrypt + verify + return a summary WITHOUT creating a char
+    // or consuming the replay ledger. Used by CMS UI to show "here's what
+    // you're about to import" before payment.
+    // ------------------------------------------------------------------------
+    struct PreviewRequest
+    {
+        std::string filePath;
+        std::vector<uint8_t> bytes;
+        std::string passphrase;
+    };
+    struct PreviewEquipItem
+    {
+        uint32_t slot = 0;
+        uint32_t itemId = 0;
+        std::string itemName;   // empty if unknown on this server
+    };
+    struct PreviewResult
+    {
+        bool ok = false;
+        std::string errorMessage;
+        // Header metadata
+        std::string fileId;
+        std::string sourceName;
+        std::string sourceCore;
+        std::string sourcePubkey;
+        std::string issuedAt;
+        bool alreadyImported = false;  // replay-check hint
+        bool sourceTrusted = false;
+        // Character summary
+        std::string charName;
+        uint32_t race = 0, cls = 0, gender = 0, level = 0;
+        std::string faction;
+        // Content counts
+        uint32_t spellCount = 0, achievementCount = 0, talentCount = 0;
+        uint32_t reputationCount = 0, skillCount = 0, titleCount = 0;
+        // Equipment (slot + itemId + itemName lookup)
+        std::vector<PreviewEquipItem> equipment;
+        // Non-fatal warnings the CMS should surface
+        std::vector<std::string> warnings;
+    };
+    PreviewResult DoPreview(PreviewRequest const& req);
 
     // ------------------------------------------------------------------------
     // GM command registration entry point (called by loader).

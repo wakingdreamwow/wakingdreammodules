@@ -85,6 +85,22 @@ CharacterPortability.Argon2.MemoryCostKB = 65536
 CharacterPortability.Argon2.Parallelism = 4
 
 ########################################
+# 5b. Equipment carry-over
+########################################
+# WCPX-1.0 excludes bags/bank/inventory/gold from portability to protect the
+# target server's economy. Optionally, equipped gear (helm, chest, weapon,
+# etc.) can be included WITHOUT enchants/gems/random-suffix/durability — the
+# character arrives wearing base-stat items. Both sides toggle independently.
+
+# Source-side: include equipped items in the .wcpx payload. Default: on.
+CharacterPortability.Export.IncludeEquipment = 1
+
+# Target-side: honor the equipment field when importing. Set to 0 for a
+# purist "arrive naked" policy that preserves your server's economy.
+# Default: on.
+CharacterPortability.Import.AcceptEquipment = 1
+
+########################################
 # 6. HTTP API (§12 Integration API)
 ########################################
 
