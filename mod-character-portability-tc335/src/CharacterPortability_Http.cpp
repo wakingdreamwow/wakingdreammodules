@@ -341,12 +341,12 @@ namespace WCPX
             if (!first) j << ",";
             first = false;
             j << "{"
-              << "\"pubkey\":\""       << row[0].Get<std::string>() << "\","
-              << "\"source_name\":\""  << row[1].Get<std::string>() << "\","
-              << "\"source_core\":\""  << row[2].Get<std::string>() << "\","
-              << "\"source_contact\":\"" << row[3].Get<std::string>() << "\","
-              << "\"first_seen\":\""   << row[4].Get<std::string>() << "\","
-              << "\"seen_count\":"     << row[5].Get<uint32_t>()
+              << "\"pubkey\":\""       << row[0].GetString() << "\","
+              << "\"source_name\":\""  << row[1].GetString() << "\","
+              << "\"source_core\":\""  << row[2].GetString() << "\","
+              << "\"source_contact\":\"" << row[3].GetString() << "\","
+              << "\"first_seen\":\""   << row[4].GetString() << "\","
+              << "\"seen_count\":"     << row[5].GetUInt32()
               << "}";
         } while (q->NextRow());
         j << "]}";

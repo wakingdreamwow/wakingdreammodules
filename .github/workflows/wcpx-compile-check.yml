@@ -64,17 +64,26 @@ jobs:
           # dedupe, which covers both flavours.
           # Prune platform-specific / MSVC-shim dirs — they shadow libc headers
           # with Windows-only #error stubs on Linux.
+          # Collect header-containing dirs (%h) AND their parents. Emit src/
+          # tree first so its `Log.h`/`Common.h` etc. have priority over any
+          # `Log.h` shadowed inside third-party deps (g3dlite/G3D/Log.h).
           INC="-I. -I./third_party"
-          while IFS= read -r d; do
+          collect() {
+            find "$1" \
+              -type d \( -name node_modules -o -name .git -o -name msvc_compat \
+                       -o -name Win32 -o -name win32 -o -name windows \
+                       -o -name jemalloc -o -name gsoap -o -name internal \) -prune -o \
+              -type f \( -name '*.h' -o -name '*.hpp' \) -printf '%h\n%h/..\n' 2>/dev/null \
+              | xargs -I{} sh -c 'cd "{}" 2>/dev/null && pwd' \
+              | sort -u
+          }
+          for d in $(collect "$AC_ROOT/src") $(collect "$AC_ROOT/deps"); do
             case "$d" in
               */msvc_compat*|*/windows/*|*/win32/*|*/Win32/*|*/vc/*|*/msvc/*|*/darwin/*|*/mac/*) continue ;;
+              */g3dlite/include/G3D) continue ;;   # its Log.h shadows TC/AC Log.h
             esac
             INC="$INC -I$d"
-          done < <(find "$AC_ROOT/src" "$AC_ROOT/deps" \
-                        -type d \( -name node_modules -o -name .git -o -name msvc_compat -o -name Win32 -o -name win32 -o -name windows \) -prune -o \
-                        -type f \( -name '*.h' -o -name '*.hpp' \) -printf '%h\n%h/..\n' 2>/dev/null \
-                        | xargs -I{} sh -c 'cd "{}" 2>/dev/null && pwd' \
-                        | sort -u)
+          done
 
           echo "::group::Include path summary"
           echo "$INC" | tr ' ' '\n' | grep -c '^-I' | xargs -I{} echo "  {} include dirs"
@@ -84,7 +93,7 @@ jobs:
           for f in *.cpp; do
             LOG=/tmp/wcpx-logs/ac-$f.log
             echo "::group::compile $f"
-            g++ -std=c++17 -fsyntax-only $INC "$f" > "$LOG" 2>&1
+            g++ -std=c++20 -fsyntax-only $INC "$f" > "$LOG" 2>&1
             RC=$?
             cat "$LOG"
             echo "::endgroup::"
@@ -145,16 +154,22 @@ jobs:
             { echo "::error::missing boost or argon2 headers"; exit 1; }
 
           INC="-I. -I./third_party"
-          while IFS= read -r d; do
+          collect() {
+            find "$1" \
+              -type d \( -name node_modules -o -name .git -o -name msvc_compat \
+                       -o -name Win32 -o -name win32 -o -name windows \
+                       -o -name jemalloc -o -name gsoap -o -name internal \) -prune -o \
+              -type f \( -name '*.h' -o -name '*.hpp' \) -printf '%h\n%h/..\n' 2>/dev/null \
+              | xargs -I{} sh -c 'cd "{}" 2>/dev/null && pwd' \
+              | sort -u
+          }
+          for d in $(collect "$TC_ROOT/src") $(collect "$TC_ROOT/dep"); do
             case "$d" in
               */msvc_compat*|*/windows/*|*/win32/*|*/Win32/*|*/vc/*|*/msvc/*|*/darwin/*|*/mac/*) continue ;;
+              */g3dlite/include/G3D) continue ;;
             esac
             INC="$INC -I$d"
-          done < <(find "$TC_ROOT/src" "$TC_ROOT/dep" \
-                        -type d \( -name node_modules -o -name .git -o -name msvc_compat -o -name Win32 -o -name win32 -o -name windows \) -prune -o \
-                        -type f \( -name '*.h' -o -name '*.hpp' \) -printf '%h\n%h/..\n' 2>/dev/null \
-                        | xargs -I{} sh -c 'cd "{}" 2>/dev/null && pwd' \
-                        | sort -u)
+          done
 
           echo "::group::Include path summary"
           echo "$INC" | tr ' ' '\n' | grep -c '^-I' | xargs -I{} echo "  {} include dirs"
@@ -164,7 +179,7 @@ jobs:
           for f in *.cpp; do
             LOG=/tmp/wcpx-logs/tc-$f.log
             echo "::group::compile $f"
-            g++ -std=c++17 -fsyntax-only $INC "$f" > "$LOG" 2>&1
+            g++ -std=c++20 -fsyntax-only $INC "$f" > "$LOG" 2>&1
             RC=$?
             cat "$LOG"
             echo "::endgroup::"

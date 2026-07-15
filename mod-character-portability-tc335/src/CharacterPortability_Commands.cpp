@@ -113,11 +113,11 @@ namespace WCPX
             {
                 auto row = r->Fetch();
                 std::ostringstream line;
-                line << " " << row[0].Get<std::string>()
-                     << " | " << row[1].Get<std::string>()
-                     << " (" << row[2].Get<std::string>() << ")"
-                     << " seen=" << row[3].Get<uint32_t>()
-                     << " first=" << row[4].Get<std::string>();
+                line << " " << row[0].GetString()
+                     << " | " << row[1].GetString()
+                     << " (" << row[2].GetString() << ")"
+                     << " seen=" << row[3].GetUInt32()
+                     << " first=" << row[4].GetString();
                 handler->SendSysMessage(line.str().c_str());
             } while (r->NextRow());
             return true;

@@ -97,7 +97,7 @@ namespace WCPX
             "AND exported_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)",
             accountId);
         if (!r) return false;
-        uint64_t used = r->Fetch()[0].Get<uint64_t>();
+        uint64_t used = r->Fetch()[0].GetUInt64();
         return used < cfg.ExportFreePerMonth;
     }
 
@@ -114,20 +114,20 @@ namespace WCPX
         if (!r) { errorOut = "character not found"; return {}; }
         auto row = r->Fetch();
 
-        std::string name = row[0].Get<std::string>();
-        uint8_t  race = row[1].Get<uint8_t>();
-        uint8_t  cls  = row[2].Get<uint8_t>();
-        uint8_t  gender = row[3].Get<uint8_t>();
-        uint32_t level = row[4].Get<uint32_t>();
-        uint32_t xp    = row[5].Get<uint32_t>();
-        uint32_t totalTime = row[6].Get<uint32_t>();
-        uint32_t levelTime = row[7].Get<uint32_t>();
-        uint8_t  skin = row[8].Get<uint8_t>();
-        uint8_t  face = row[9].Get<uint8_t>();
-        uint8_t  hairStyle = row[10].Get<uint8_t>();
-        uint8_t  hairColor = row[11].Get<uint8_t>();
-        uint8_t  facialStyle = row[12].Get<uint8_t>();
-        uint8_t activeSpec = row[13].Get<uint8_t>();
+        std::string name = row[0].GetString();
+        uint8_t  race = row[1].GetUInt8();
+        uint8_t  cls  = row[2].GetUInt8();
+        uint8_t  gender = row[3].GetUInt8();
+        uint32_t level = row[4].GetUInt32();
+        uint32_t xp    = row[5].GetUInt32();
+        uint32_t totalTime = row[6].GetUInt32();
+        uint32_t levelTime = row[7].GetUInt32();
+        uint8_t  skin = row[8].GetUInt8();
+        uint8_t  face = row[9].GetUInt8();
+        uint8_t  hairStyle = row[10].GetUInt8();
+        uint8_t  hairColor = row[11].GetUInt8();
+        uint8_t  facialStyle = row[12].GetUInt8();
+        uint8_t activeSpec = row[13].GetUInt8();
 
         // Homebind (separate table in AC / TC-335 / cMaNGOS)
         uint32_t bindMap = 0, bindZone = 0;
@@ -136,11 +136,11 @@ namespace WCPX
                 "SELECT mapId, zoneId, posX, posY, posZ FROM character_homebind WHERE guid={}", guid))
         {
             auto hbrow = hb->Fetch();
-            bindMap  = hbrow[0].Get<uint16_t>();
-            bindZone = hbrow[1].Get<uint16_t>();
-            bx = hbrow[2].Get<float>();
-            by = hbrow[3].Get<float>();
-            bz = hbrow[4].Get<float>();
+            bindMap  = hbrow[0].GetUInt16();
+            bindZone = hbrow[1].GetUInt16();
+            bx = hbrow[2].GetFloat();
+            by = hbrow[3].GetFloat();
+            bz = hbrow[4].GetFloat();
         }
 
         std::string faction = (race == 1 || race == 3 || race == 4 || race == 7 || race == 11)
@@ -185,8 +185,8 @@ namespace WCPX
                 auto tr = t->Fetch();
                 if (!first) j << ",";
                 first = false;
-                uint32_t spell = tr[0].Get<uint32_t>();
-                uint8_t specMask = tr[1].Get<uint8_t>();
+                uint32_t spell = tr[0].GetUInt32();
+                uint8_t specMask = tr[1].GetUInt8();
                 uint8_t spec = (specMask & 0x02) ? 1 : 0;
                 j << "{\"spell_id\":" << spell << ",\"current_rank\":1,\"spec\":" << (int)spec << "}";
             } while (t->NextRow());
@@ -204,7 +204,7 @@ namespace WCPX
                 auto sr = s->Fetch();
                 if (!first) j << ",";
                 first = false;
-                j << sr[0].Get<uint32_t>();
+                j << sr[0].GetUInt32();
             } while (s->NextRow());
         }
         j << "],";
@@ -220,8 +220,8 @@ namespace WCPX
                 auto ar = a->Fetch();
                 if (!first) j << ",";
                 first = false;
-                uint32_t id = ar[0].Get<uint32_t>();
-                uint32_t ts = ar[1].Get<uint32_t>();
+                uint32_t id = ar[0].GetUInt32();
+                uint32_t ts = ar[1].GetUInt32();
                 std::time_t tt = static_cast<std::time_t>(ts);
                 std::tm gm{};
 #if defined(_WIN32)
@@ -247,9 +247,9 @@ namespace WCPX
                 auto rr = rep->Fetch();
                 if (!first) j << ",";
                 first = false;
-                j << "{\"faction_id\":" << rr[0].Get<uint16_t>()
-                  << ",\"standing\":" << rr[1].Get<int32_t>()
-                  << ",\"flags\":" << rr[2].Get<uint16_t>() << "}";
+                j << "{\"faction_id\":" << rr[0].GetUInt16()
+                  << ",\"standing\":" << rr[1].GetInt32()
+                  << ",\"flags\":" << rr[2].GetUInt16() << "}";
             } while (rep->NextRow());
         }
         j << "],";
@@ -265,9 +265,9 @@ namespace WCPX
                 auto sr = sk->Fetch();
                 if (!first) j << ",";
                 first = false;
-                j << "{\"skill_id\":" << sr[0].Get<uint32_t>()
-                  << ",\"value\":" << sr[1].Get<uint32_t>()
-                  << ",\"max\":" << sr[2].Get<uint32_t>() << "}";
+                j << "{\"skill_id\":" << sr[0].GetUInt32()
+                  << ",\"value\":" << sr[1].GetUInt32()
+                  << ",\"max\":" << sr[2].GetUInt32() << "}";
             } while (sk->NextRow());
         }
         j << "],";
@@ -287,8 +287,8 @@ namespace WCPX
                 auto er = eq->Fetch();
                 if (!first) j << ",";
                 first = false;
-                j << "{\"slot\":" << (int)er[0].Get<uint8_t>()
-                  << ",\"item_id\":" << er[1].Get<uint32_t>() << "}";
+                j << "{\"slot\":" << (int)er[0].GetUInt8()
+                  << ",\"item_id\":" << er[1].GetUInt32() << "}";
             } while (eq->NextRow());
             j << "],";
         }
@@ -303,7 +303,7 @@ namespace WCPX
             if (tt)
             {
                 auto ttr = tt->Fetch();
-                std::string blob = ttr[0].Get<std::string>();
+                std::string blob = ttr[0].GetString();
                 // blob is space-separated hex or decimal ints depending on core; parse decimals.
                 std::istringstream iss(blob);
                 uint64_t word;
@@ -398,7 +398,7 @@ namespace WCPX
         QueryResult acc = CharacterDatabase.Query(
             "SELECT account FROM characters WHERE guid={}", req.characterGuid);
         if (!acc) { res.errorMessage = "character not found"; return res; }
-        uint32_t accountId = acc->Fetch()[0].Get<uint32_t>();
+        uint32_t accountId = acc->Fetch()[0].GetUInt32();
 
         if (!CheckExportQuota(accountId, req.bypassRateLimit))
         { res.errorMessage = "export quota exceeded (paid export required)"; return res; }
