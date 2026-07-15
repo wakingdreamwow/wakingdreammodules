@@ -92,16 +92,23 @@ jobs:
             -I$AC_ROOT/src/server/shared/DataStores \
             -I$AC_ROOT/deps/utf8cpp/source"
           FAIL=0
+          # Verify we have boost + argon2 headers present
+          ls /usr/include/boost/version.hpp /usr/include/argon2.h >/dev/null || \
+            { echo "::error::missing boost or argon2 headers"; exit 1; }
           for f in *.cpp; do
-            echo "=== compile $f ==="
+            echo "::group::compile $f"
             g++ -std=c++17 -fsyntax-only $INC "$f" 2>&1 | tee /tmp/log-$f.txt || true
+            echo "::endgroup::"
+            # First 30 error/warning lines summarized to workflow log
             if grep -q 'error:' /tmp/log-$f.txt; then
-              echo "::error file=$f::compile failure — see log"
+              echo "::error file=$f::compile failure"
+              echo "---first errors in $f---"
+              grep -A1 'error:' /tmp/log-$f.txt | head -30
               FAIL=1
             fi
           done
           if [ $FAIL -ne 0 ]; then
-            echo "AC compile check failed. This means AzerothCore master moved an API surface."
+            echo "AC compile check failed. This means AzerothCore master moved an API surface, or an include path is wrong."
             exit 1
           fi
 
