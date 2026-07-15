@@ -57,9 +57,11 @@ jobs:
           ls /usr/include/boost/version.hpp /usr/include/argon2.h > /dev/null || \
             { echo "::error::missing boost or argon2 headers"; exit 1; }
 
-          # Build INCLUDE_ARGS dynamically: -I every directory under src/ and deps/
-          # that contains at least one header. Mirrors what AC's own CMakeLists.txt
-          # does via CollectIncludeDirectories.
+          # Build INCLUDE_ARGS dynamically: -I every directory that either
+          # contains a header directly OR contains a subdirectory with headers
+          # (e.g. `G3D/platform.h` needs -I on `deps/g3dlite/include/`, not on
+          # `deps/g3dlite/include/G3D/`). We emit both %h and its parent then
+          # dedupe, which covers both flavours.
           # Prune platform-specific / MSVC-shim dirs — they shadow libc headers
           # with Windows-only #error stubs on Linux.
           INC="-I. -I./third_party"
@@ -70,7 +72,9 @@ jobs:
             INC="$INC -I$d"
           done < <(find "$AC_ROOT/src" "$AC_ROOT/deps" \
                         -type d \( -name node_modules -o -name .git -o -name msvc_compat -o -name Win32 -o -name win32 -o -name windows \) -prune -o \
-                        -type f \( -name '*.h' -o -name '*.hpp' \) -printf '%h\n' 2>/dev/null | sort -u)
+                        -type f \( -name '*.h' -o -name '*.hpp' \) -printf '%h\n%h/..\n' 2>/dev/null \
+                        | xargs -I{} sh -c 'cd "{}" 2>/dev/null && pwd' \
+                        | sort -u)
 
           echo "::group::Include path summary"
           echo "$INC" | tr ' ' '\n' | grep -c '^-I' | xargs -I{} echo "  {} include dirs"
@@ -148,7 +152,9 @@ jobs:
             INC="$INC -I$d"
           done < <(find "$TC_ROOT/src" "$TC_ROOT/dep" \
                         -type d \( -name node_modules -o -name .git -o -name msvc_compat -o -name Win32 -o -name win32 -o -name windows \) -prune -o \
-                        -type f \( -name '*.h' -o -name '*.hpp' \) -printf '%h\n' 2>/dev/null | sort -u)
+                        -type f \( -name '*.h' -o -name '*.hpp' \) -printf '%h\n%h/..\n' 2>/dev/null \
+                        | xargs -I{} sh -c 'cd "{}" 2>/dev/null && pwd' \
+                        | sort -u)
 
           echo "::group::Include path summary"
           echo "$INC" | tr ' ' '\n' | grep -c '^-I' | xargs -I{} echo "  {} include dirs"
