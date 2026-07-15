@@ -112,7 +112,7 @@ jobs:
             exit 1
           fi
 
-  compile-trinitycore-3.3.5:
+  compile-trinitycore-335:
     name: Compile against TrinityCore 3.3.5 (preview)
     runs-on: ubuntu-24.04
     continue-on-error: true   # preview branch — failures notify but don't block
