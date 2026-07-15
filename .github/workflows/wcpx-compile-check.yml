@@ -7,7 +7,8 @@ name: WCPX compile check (AzerothCore + TrinityCore 3.3.5)
 #
 # When this fails: a core moved an API surface we depend on. Update the
 # affected mod file (and PORTING-*.md if the fix would benefit other
-# adopters), and re-run.
+# adopters), and re-run. Full compiler output is uploaded as an artifact
+# so you can download it from the run summary page.
 
 on:
   push:
@@ -22,8 +23,7 @@ on:
       - '.github/workflows/wcpx-compile-check.yml'
   workflow_dispatch:
   schedule:
-    # Weekly Monday 05:00 UTC so we catch upstream API drift even without commits.
-    - cron: '0 5 * * 1'
+    - cron: '0 5 * * 1'   # Weekly Monday 05:00 UTC — catches upstream drift
 
 jobs:
   compile-azerothcore:
@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout mod
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: mod
 
@@ -50,75 +50,66 @@ jobs:
         env:
           AC_ROOT: ${{ github.workspace }}/ac
         run: |
-          # Include path list mirrors what AC's own CMakeLists exposes to
-          # modules. Verified 2026-07-15 against AC HEAD tree layout.
-          INC="-I. -I./third_party \
-            -I$AC_ROOT/src/common \
-            -I$AC_ROOT/src/common/Asio \
-            -I$AC_ROOT/src/common/Debugging \
-            -I$AC_ROOT/src/common/Logging \
-            -I$AC_ROOT/src/common/Threading \
-            -I$AC_ROOT/src/common/Utilities \
-            -I$AC_ROOT/src/common/Configuration \
-            -I$AC_ROOT/src/server/database \
-            -I$AC_ROOT/src/server/database/Database \
-            -I$AC_ROOT/src/server/database/Database/Implementation \
-            -I$AC_ROOT/src/server/database/Field \
-            -I$AC_ROOT/src/server/database/Logging \
-            -I$AC_ROOT/src/server/game \
-            -I$AC_ROOT/src/server/game/Chat \
-            -I$AC_ROOT/src/server/game/Chat/ChatCommands \
-            -I$AC_ROOT/src/server/game/Entities/Item \
-            -I$AC_ROOT/src/server/game/Entities/Player \
-            -I$AC_ROOT/src/server/game/Entities/Object \
-            -I$AC_ROOT/src/server/game/Entities/Unit \
-            -I$AC_ROOT/src/server/game/Entities/Creature \
-            -I$AC_ROOT/src/server/game/Entities/GameObject \
-            -I$AC_ROOT/src/server/game/Entities/Corpse \
-            -I$AC_ROOT/src/server/game/Entities/DynamicObject \
-            -I$AC_ROOT/src/server/game/Entities/Pet \
-            -I$AC_ROOT/src/server/game/Entities/Vehicle \
-            -I$AC_ROOT/src/server/game/Globals \
-            -I$AC_ROOT/src/server/game/Spells \
-            -I$AC_ROOT/src/server/game/Spells/Auras \
-            -I$AC_ROOT/src/server/game/Accounts \
-            -I$AC_ROOT/src/server/game/Server \
-            -I$AC_ROOT/src/server/game/Server/Protocol \
-            -I$AC_ROOT/src/server/game/Scripting \
-            -I$AC_ROOT/src/server/game/Cache \
-            -I$AC_ROOT/src/server/game/Miscellaneous \
-            -I$AC_ROOT/src/server/shared \
-            -I$AC_ROOT/src/server/shared/Common \
-            -I$AC_ROOT/src/server/shared/DataStores \
-            -I$AC_ROOT/deps/utf8cpp/source"
-          FAIL=0
-          # Verify we have boost + argon2 headers present
-          ls /usr/include/boost/version.hpp /usr/include/argon2.h >/dev/null || \
+          set +e   # never let a single command fail the step; we gate on log grep
+          mkdir -p /tmp/wcpx-logs
+
+          # Verify build deps are actually present.
+          ls /usr/include/boost/version.hpp /usr/include/argon2.h > /dev/null || \
             { echo "::error::missing boost or argon2 headers"; exit 1; }
+
+          # Build INCLUDE_ARGS dynamically: -I every directory under src/ and deps/
+          # that contains at least one header. Mirrors what AC's own CMakeLists.txt
+          # does via CollectIncludeDirectories.
+          INC="-I. -I./third_party"
+          while IFS= read -r d; do
+            INC="$INC -I$d"
+          done < <(find "$AC_ROOT/src" "$AC_ROOT/deps" -type d \( -name node_modules -o -name .git \) -prune -o \
+                        -type f \( -name '*.h' -o -name '*.hpp' \) -printf '%h\n' 2>/dev/null | sort -u)
+
+          echo "::group::Include path summary"
+          echo "$INC" | tr ' ' '\n' | grep -c '^-I' | xargs -I{} echo "  {} include dirs"
+          echo "::endgroup::"
+
+          FAIL=0
           for f in *.cpp; do
+            LOG=/tmp/wcpx-logs/ac-$f.log
             echo "::group::compile $f"
-            g++ -std=c++17 -fsyntax-only $INC "$f" 2>&1 | tee /tmp/log-$f.txt || true
+            g++ -std=c++17 -fsyntax-only $INC "$f" > "$LOG" 2>&1
+            RC=$?
+            cat "$LOG"
             echo "::endgroup::"
-            # First 30 error/warning lines summarized to workflow log
-            if grep -q 'error:' /tmp/log-$f.txt; then
-              echo "::error file=$f::compile failure"
-              echo "---first errors in $f---"
-              grep -A1 'error:' /tmp/log-$f.txt | head -30
+
+            # Real errors (line format "path:L:C: error:") — not paths that
+            # happen to contain the word "error:".
+            ERR_COUNT=$(grep -cE '^[^ ].*:[0-9]+:[0-9]+: (fatal )?error:' "$LOG" || true)
+            if [ "$RC" -ne 0 ] || [ "$ERR_COUNT" -gt 0 ]; then
+              echo "::error file=$f::compile failure ($ERR_COUNT error line(s), rc=$RC)"
+              grep -E '^[^ ].*:[0-9]+:[0-9]+: (fatal )?error:' "$LOG" | head -5
               FAIL=1
             fi
           done
+
           if [ $FAIL -ne 0 ]; then
-            echo "AC compile check failed. This means AzerothCore master moved an API surface, or an include path is wrong."
+            echo "AC compile check failed. Full per-file logs uploaded as workflow artifact."
             exit 1
           fi
+
+      - name: Upload compile logs (AC)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wcpx-ac-compile-logs
+          path: /tmp/wcpx-logs/ac-*.log
+          if-no-files-found: warn
+          retention-days: 14
 
   compile-trinitycore-335:
     name: Compile against TrinityCore 3.3.5 (preview)
     runs-on: ubuntu-24.04
-    continue-on-error: true   # preview branch — failures notify but don't block
+    continue-on-error: true   # preview branch — failures notify but don't gate
     steps:
       - name: Checkout mod
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: mod
 
@@ -137,58 +128,49 @@ jobs:
         env:
           TC_ROOT: ${{ github.workspace }}/tc
         run: |
-          # Include path list mirrors what TC's own CMakeLists exposes to
-          # scripts. Verified 2026-07-15 against TC 3.3.5 tree layout.
-          INC="-I. -I./third_party \
-            -I$TC_ROOT/src/common \
-            -I$TC_ROOT/src/common/Asio \
-            -I$TC_ROOT/src/common/Debugging \
-            -I$TC_ROOT/src/common/Logging \
-            -I$TC_ROOT/src/common/Threading \
-            -I$TC_ROOT/src/common/Utilities \
-            -I$TC_ROOT/src/common/Configuration \
-            -I$TC_ROOT/src/server/database \
-            -I$TC_ROOT/src/server/database/Database \
-            -I$TC_ROOT/src/server/database/Database/Implementation \
-            -I$TC_ROOT/src/server/database/Field \
-            -I$TC_ROOT/src/server/database/Logging \
-            -I$TC_ROOT/src/server/game \
-            -I$TC_ROOT/src/server/game/Chat \
-            -I$TC_ROOT/src/server/game/Chat/ChatCommands \
-            -I$TC_ROOT/src/server/game/Entities/Item \
-            -I$TC_ROOT/src/server/game/Entities/Player \
-            -I$TC_ROOT/src/server/game/Entities/Object \
-            -I$TC_ROOT/src/server/game/Entities/Unit \
-            -I$TC_ROOT/src/server/game/Entities/Creature \
-            -I$TC_ROOT/src/server/game/Entities/GameObject \
-            -I$TC_ROOT/src/server/game/Entities/Corpse \
-            -I$TC_ROOT/src/server/game/Entities/DynamicObject \
-            -I$TC_ROOT/src/server/game/Entities/Pet \
-            -I$TC_ROOT/src/server/game/Entities/Vehicle \
-            -I$TC_ROOT/src/server/game/Globals \
-            -I$TC_ROOT/src/server/game/Spells \
-            -I$TC_ROOT/src/server/game/Spells/Auras \
-            -I$TC_ROOT/src/server/game/Accounts \
-            -I$TC_ROOT/src/server/game/Server \
-            -I$TC_ROOT/src/server/game/Server/Protocol \
-            -I$TC_ROOT/src/server/game/Scripting \
-            -I$TC_ROOT/src/server/game/Cache \
-            -I$TC_ROOT/src/server/game/Miscellaneous \
-            -I$TC_ROOT/src/server/shared \
-            -I$TC_ROOT/src/server/shared/Common \
-            -I$TC_ROOT/src/server/shared/DataStores \
-            -I$TC_ROOT/dep/utf8cpp/source \
-            -I$TC_ROOT/dep/boost"
+          set +e
+          mkdir -p /tmp/wcpx-logs
+
+          ls /usr/include/boost/version.hpp /usr/include/argon2.h > /dev/null || \
+            { echo "::error::missing boost or argon2 headers"; exit 1; }
+
+          INC="-I. -I./third_party"
+          while IFS= read -r d; do
+            INC="$INC -I$d"
+          done < <(find "$TC_ROOT/src" "$TC_ROOT/dep" -type d \( -name node_modules -o -name .git \) -prune -o \
+                        -type f \( -name '*.h' -o -name '*.hpp' \) -printf '%h\n' 2>/dev/null | sort -u)
+
+          echo "::group::Include path summary"
+          echo "$INC" | tr ' ' '\n' | grep -c '^-I' | xargs -I{} echo "  {} include dirs"
+          echo "::endgroup::"
+
           FAIL=0
           for f in *.cpp; do
-            echo "=== compile $f ==="
-            g++ -std=c++17 -fsyntax-only $INC "$f" 2>&1 | tee /tmp/log-tc-$f.txt || true
-            if grep -q 'error:' /tmp/log-tc-$f.txt; then
-              echo "::warning file=$f::TC compile failure — port may need updates"
+            LOG=/tmp/wcpx-logs/tc-$f.log
+            echo "::group::compile $f"
+            g++ -std=c++17 -fsyntax-only $INC "$f" > "$LOG" 2>&1
+            RC=$?
+            cat "$LOG"
+            echo "::endgroup::"
+
+            ERR_COUNT=$(grep -cE '^[^ ].*:[0-9]+:[0-9]+: (fatal )?error:' "$LOG" || true)
+            if [ "$RC" -ne 0 ] || [ "$ERR_COUNT" -gt 0 ]; then
+              echo "::warning file=$f::TC compile failure ($ERR_COUNT error line(s), rc=$RC)"
+              grep -E '^[^ ].*:[0-9]+:[0-9]+: (fatal )?error:' "$LOG" | head -5
               FAIL=1
             fi
           done
+
           if [ $FAIL -ne 0 ]; then
-            echo "::warning::TC-335 preview compile broke. Update mod-character-portability-tc335/ or note in PORTING-TC335.md."
+            echo "::warning::TC-335 preview compile broke. Full logs in the workflow artifact."
             exit 1
           fi
+
+      - name: Upload compile logs (TC)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wcpx-tc-compile-logs
+          path: /tmp/wcpx-logs/tc-*.log
+          if-no-files-found: warn
+          retention-days: 14
