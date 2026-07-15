@@ -10,7 +10,12 @@
 #include "CharacterPortability.h"
 
 #include "DatabaseEnv.h"
+#include "QueryResult.h"
+#include "Field.h"
 #include "Log.h"
+
+#include <openssl/evp.h>
+#include <openssl/pem.h>
 
 #include <chrono>
 #include <ctime>
@@ -92,7 +97,7 @@ namespace WCPX
             "AND exported_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)",
             accountId);
         if (!r) return false;
-        uint64_t used = (*r)[0].Get<uint64_t>();
+        uint64_t used = r->Fetch()[0].Get<uint64_t>();
         return used < cfg.ExportFreePerMonth;
     }
 
@@ -104,7 +109,6 @@ namespace WCPX
         QueryResult r = CharacterDatabase.Query(
             "SELECT name, race, class, gender, level, xp, totaltime, leveltime, "
             "       skin, face, hairStyle, hairColor, facialStyle, "
-            "       bindpoint_map, bindpoint_zone, bindpoint_x, bindpoint_y, bindpoint_z, "
             "       activeTalentGroup "
             "FROM characters WHERE guid={}", guid);
         if (!r) { errorOut = "character not found"; return {}; }
@@ -123,10 +127,21 @@ namespace WCPX
         uint8_t  hairStyle = row[10].Get<uint8_t>();
         uint8_t  hairColor = row[11].Get<uint8_t>();
         uint8_t  facialStyle = row[12].Get<uint8_t>();
-        uint32_t bindMap = row[13].Get<uint32_t>();
-        uint32_t bindZone = row[14].Get<uint32_t>();
-        float bx = row[15].Get<float>(), by = row[16].Get<float>(), bz = row[17].Get<float>();
-        uint8_t activeSpec = row[18].Get<uint8_t>();
+        uint8_t activeSpec = row[13].Get<uint8_t>();
+
+        // Homebind (separate table in AC / TC-335 / cMaNGOS)
+        uint32_t bindMap = 0, bindZone = 0;
+        float bx = 0.f, by = 0.f, bz = 0.f;
+        if (QueryResult hb = CharacterDatabase.Query(
+                "SELECT mapId, zoneId, posX, posY, posZ FROM character_homebind WHERE guid={}", guid))
+        {
+            auto hbrow = hb->Fetch();
+            bindMap  = hbrow[0].Get<uint16_t>();
+            bindZone = hbrow[1].Get<uint16_t>();
+            bx = hbrow[2].Get<float>();
+            by = hbrow[3].Get<float>();
+            bz = hbrow[4].Get<float>();
+        }
 
         std::string faction = (race == 1 || race == 3 || race == 4 || race == 7 || race == 11)
                               ? "alliance" : "horde";
@@ -182,7 +197,7 @@ namespace WCPX
         j << "\"spells\":[";
         {
             QueryResult s = CharacterDatabase.Query(
-                "SELECT spell FROM character_spell WHERE guid={} AND disabled=0", guid);
+                "SELECT spell FROM character_spell WHERE guid={}", guid);
             bool first = true;
             if (s) do
             {
@@ -232,9 +247,9 @@ namespace WCPX
                 auto rr = rep->Fetch();
                 if (!first) j << ",";
                 first = false;
-                j << "{\"faction_id\":" << rr[0].Get<uint32_t>()
+                j << "{\"faction_id\":" << rr[0].Get<uint16_t>()
                   << ",\"standing\":" << rr[1].Get<int32_t>()
-                  << ",\"flags\":" << (int)rr[2].Get<uint8_t>() << "}";
+                  << ",\"flags\":" << rr[2].Get<uint16_t>() << "}";
             } while (rep->NextRow());
         }
         j << "],";

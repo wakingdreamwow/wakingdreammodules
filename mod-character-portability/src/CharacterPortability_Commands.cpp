@@ -8,10 +8,13 @@
  */
 #include "CharacterPortability.h"
 
+#include "Log.h"
+#include "ScriptMgr.h"
 #include "Chat.h"
 #include "ChatCommand.h"
 #include "ObjectMgr.h"
 #include "AccountMgr.h"
+#include "CharacterCache.h"
 #include "DatabaseEnv.h"
 
 using namespace Acore::ChatCommands;
@@ -46,10 +49,10 @@ namespace WCPX
         static bool HandleExport(ChatHandler* handler, std::string const& charName,
                                  std::string const& passphrase)
         {
-            uint32_t guid = sObjectMgr->GetPlayerGUIDByName(charName).GetCounter();
+            uint32_t guid = sCharacterCache->GetCharacterGuidByName(charName).GetCounter();
             if (!guid)
             {
-                handler->PSendSysMessage("[WCPX] unknown character: %s", charName.c_str());
+                handler->SendSysMessage(("[WCPX] unknown character: " + charName).c_str());
                 return true;
             }
             ExportRequest req;
@@ -59,20 +62,22 @@ namespace WCPX
             auto res = DoExport(req);
             if (!res.ok)
             {
-                handler->PSendSysMessage("[WCPX] export failed: %s", res.errorMessage.c_str());
+                LOG_ERROR("module", "[WCPX] export failed for {}: {}", charName, res.errorMessage);
+                handler->SendSysMessage(("[WCPX] export failed: " + res.errorMessage).c_str());
                 return true;
             }
-            handler->PSendSysMessage("[WCPX] exported to %s (file_id=%s)",
-                                    res.filePath.c_str(), res.fileId.c_str());
+            handler->SendSysMessage(
+                ("[WCPX] exported to " + res.filePath + " (file_id=" + res.fileId + ")").c_str());
             return true;
         }
 
         static bool HandleImport(ChatHandler* handler, std::string const& path,
                                  std::string const& passphrase, uint32_t accountId)
         {
-            if (!sAccountMgr->GetName(accountId).length())
+            std::string accountName;
+            if (!sAccountMgr->GetName(accountId, accountName) || accountName.empty())
             {
-                handler->PSendSysMessage("[WCPX] unknown target account %u", accountId);
+                handler->SendSysMessage(("[WCPX] unknown target account " + std::to_string(accountId)).c_str());
                 return true;
             }
             ImportRequest req;
@@ -83,11 +88,12 @@ namespace WCPX
             auto res = DoImport(req);
             if (!res.ok)
             {
-                handler->PSendSysMessage("[WCPX] import failed: %s", res.errorMessage.c_str());
+                LOG_ERROR("module", "[WCPX] import failed: {}", res.errorMessage);
+                handler->SendSysMessage(("[WCPX] import failed: " + res.errorMessage).c_str());
                 return true;
             }
-            handler->PSendSysMessage("[WCPX] imported as character guid=%u",
-                                    res.newCharacterGuid);
+            handler->SendSysMessage(
+                ("[WCPX] imported as character guid=" + std::to_string(res.newCharacterGuid)).c_str());
             return true;
         }
 
@@ -101,20 +107,21 @@ namespace WCPX
             do
             {
                 auto row = r->Fetch();
-                handler->PSendSysMessage(" %s | %s (%s) seen=%u first=%s",
-                    row[0].Get<std::string>().c_str(),
-                    row[1].Get<std::string>().c_str(),
-                    row[2].Get<std::string>().c_str(),
-                    row[3].Get<uint32_t>(),
-                    row[4].Get<std::string>().c_str());
+                std::ostringstream line;
+                line << " " << row[0].Get<std::string>()
+                     << " | " << row[1].Get<std::string>()
+                     << " (" << row[2].Get<std::string>() << ")"
+                     << " seen=" << row[3].Get<uint32_t>()
+                     << " first=" << row[4].Get<std::string>();
+                handler->SendSysMessage(line.str().c_str());
             } while (r->NextRow());
             return true;
         }
 
         static bool HandleTrustApprove(ChatHandler* handler, std::string const& pubkey)
         {
-            handler->PSendSysMessage("[WCPX] appending pubkey to whitelist: %s", pubkey.c_str());
-            handler->PSendSysMessage(
+            handler->SendSysMessage(("[WCPX] appending pubkey to whitelist: " + pubkey).c_str());
+            handler->SendSysMessage(
                 "[WCPX] NOTE: add this pubkey to CharacterPortability.Trust.Whitelist in "
                 "character_portability.conf and reload the config for persistence.");
             Config::Instance().TrustWhitelist.push_back(pubkey);

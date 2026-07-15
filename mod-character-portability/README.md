@@ -6,6 +6,30 @@ Lets players export their character to a signed, encrypted `.wcpx` file, and
 lets admins accept `.wcpx` files from other trusted servers as new characters
 on this server.
 
+**Status:** Live in production on Wakingdream since 2026-07-15. First
+real-world round-trip export→import completed with all levels, spells,
+mounts, achievements, reputation, skills, and talents intact.
+
+## For operators of other 3.3.5a emulators
+
+If you're on **TrinityCore-335**, this mod likely compiles as-is (AC forked
+from TC-335, DB schemas are identical). Try dropping it into your `modules/`
+first — most porting effort is in updating the include-paths if TC uses
+different header names.
+
+If you're on **cMaNGOS-wotlk**, use this as a template but expect ~4-8h of
+DB-layer adjustments (see `PORTING.md` in the spec repo for schema deltas).
+
+If you're on a **custom fork** (Sunwell, Playerbots-branch, etc.): try the
+drop-in first, fix compile errors as they come up.
+
+Cross-expansion notes:
+- Import from a higher-cap server (e.g. Cata's L85 → this server's L80):
+  level is clamped to your server's `CONFIG_MAX_PLAYER_LEVEL`, XP zeroed.
+  Set `CharacterPortability.Import.RejectOverLevel = 1` to reject instead.
+- Spells/achievements not in your DBCs: silently dropped.
+- Class not valid on your server (e.g. DK from WotLK into vanilla): reject.
+
 ## Feature summary
 
 - **Export:** produces a `.wcpx` file containing level, XP, talents, spells

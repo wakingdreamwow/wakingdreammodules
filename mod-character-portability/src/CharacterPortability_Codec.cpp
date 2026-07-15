@@ -13,6 +13,7 @@
  */
 #include "CharacterPortability.h"
 
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <cstring>
@@ -203,6 +204,10 @@ namespace WCPX::Codec
         if (file.payloadTag.size() != 16) return false;
         buf.insert(buf.end(), file.payloadTag.begin(), file.payloadTag.end());
 
+        std::error_code ec;
+        auto parent = std::filesystem::path(path).parent_path();
+        if (!parent.empty())
+            std::filesystem::create_directories(parent, ec);
         std::ofstream ofs(path, std::ios::binary | std::ios::trunc);
         if (!ofs) return false;
         ofs.write(reinterpret_cast<const char*>(buf.data()),

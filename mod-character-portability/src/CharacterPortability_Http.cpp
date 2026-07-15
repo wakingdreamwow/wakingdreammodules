@@ -18,12 +18,14 @@
 #include "CharacterPortability.h"
 
 #include "DatabaseEnv.h"
+#include "QueryResult.h"
+#include "Field.h"
 #include "Log.h"
-
-#include "third_party/httplib.h"
 
 #include <openssl/pem.h>
 #include <openssl/evp.h>
+
+#include "third_party/httplib.h"
 
 #include <atomic>
 #include <memory>
